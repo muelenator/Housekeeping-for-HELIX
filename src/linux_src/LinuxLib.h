@@ -1,3 +1,13 @@
+/*
+ * LinuxLib.h
+ *
+ * Provides helper functions for SerialPort_linux. Sets up the serial 
+ * connection and preps the serial bus.
+ *
+ * Function declarations.
+ * 
+ */
+
 #pragma once
 
 #include <iostream>

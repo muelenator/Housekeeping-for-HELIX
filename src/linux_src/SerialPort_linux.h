@@ -1,24 +1,31 @@
 /* 
- * PS_SerialPort.h
+ * SerialPort_linux.h
  *
- * Header file declares the SerialPort class
+ * Library for opening, reading, and writing to a serial port in COBS encoding 
+ * on Linux.
  *
  */
+#pragma once
 
-#ifndef SERIALPORT_H
-#define SERIALPORT_H
-
-/* define MAX_DATA_LENGTH sizeof(housekeeping_hdr_t)+255*sizeof(uint8_t) + 1 */
-#define MAX_DATA_LENGTH (4 + 255 + 1)
-#define ARDUINO_WAIT_TIME 2000
+#include "LinuxLib.h"
 
 #include <cstdint>
 #include <errno.h>
-#include <fcntl.h> 
-#include <string.h>
+#include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
+
+/* Max data length is: 
+ *	--4 header bytes
+ *	-- + 255 data bytes
+ *  -- + 1 CRC (checksum) byte
+ * For max packet size, 
+ *	-- +1 COBS overhead
+ *	-- +1 COBS packet marker
+ */
+#define MAX_PACKET_LENGTH (4 + 255 + 1) + 2
+/* define WAIT_TIME for time to wait after connecting to board */
+#define WAIT_TIME 2000
 
 class SerialPort
 {	
@@ -47,7 +54,7 @@ private:
     bool connected;
     
     /* COBS helpers for receiving an unknown packet */
-	uint8_t _receiveBuffer[MAX_DATA_LENGTH] = {0};
+	uint8_t _receiveBuffer[MAX_PACKET_LENGTH] = {0};
 	size_t _receiveBufferIndex = 0;
 	/* On-packet-received function initialization */
 	PacketHandlerFunction _PacketReceivedFunction = 0;
@@ -55,4 +62,3 @@ private:
 	
 };
 
-#endif // SERIALPORT_H

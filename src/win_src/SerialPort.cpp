@@ -1,7 +1,7 @@
 /* 
- * PS_SERIALPORT.cpp
+ * SerialPort.cpp
  *
- * Defines the SerialPort class
+ * Defines the SerialPort class and its functions.
  *
  */
 
@@ -9,8 +9,7 @@
  * Defines
  ****************************************************************************/
 #include "SerialPort.h"
-#include "COBS.h"
-#include "LinuxLib.h"
+#include "../COBS.h"
 
 using std::cout;
 using std::endl;
@@ -19,43 +18,58 @@ using std::endl;
  * Contructor/Destructor
  ****************************************************************************/
 
-/* SerialPort instance: Opens up a serial port with specific parameters.
+/* Function flow:
+ * --SerialPort instance: Opens up a serial port with specific parameters.
  * --If the port the user chose in main.cpp cannot be opened, spit out an error
  *
- * dst_buf_ptr:    The buffer into which the result will be written
- * dst_buf_len:    Length of the buffer into which the result will be written
- * src_ptr:        The byte string to be encoded
- * src_len         Length of the byte string to be encoded
- *
- * returns:        A struct containing the success status of the encoding
- *                 operation and the length of the result (that was written to
- *                 dst_buf_ptr)
+ * Function params:
+ * portName:		Name of our opened serial port in SerialPort_linux
+ * 
  */
-
-/* Open up a serial port. If the port the user chose in main.cpp cannot be 
-	opened, spit out an error */
 SerialPort::SerialPort(const char *portName)
 {
     this->connected = false;
 
-    this->handler = open (portName, O_RDWR | O_NOCTTY | O_SYNC); //)_NDELAY  
-    
-    if (this->handler < 0)
-    {
-	//	error_message ("error %d opening %s: %s", errno, portName, strerror (errno));
-		return;
-    }
-    /* Setup serial port parameters in a DCB struct */
-    else 
-    {
-   		if (set_interface_attribs (this->handler, B9600, 0) == 0)  
-   		{	// set speed to 9,600 bps, 8n1 (no parity)
-			set_mincount (this->handler, 0);                // set no blocking
-   		   		
-        	this->connected = true;
-        	usleep(ARDUINO_WAIT_TIME);
+    this->handler = CreateFileA(portName,							//port name
+                                GENERIC_READ | GENERIC_WRITE,		//Read/Write
+                                0,									//No sharing
+                                NULL,								//No security
+                                OPEN_EXISTING,			//Open existing port only
+                                FILE_ATTRIBUTE_NORMAL,	//Non Overlapped I/O (nothing fancy...)
+                                NULL);					//Null for comm Devices
+    if (this->handler == INVALID_HANDLE_VALUE){
+        if (GetLastError() == ERROR_FILE_NOT_FOUND){
+            printf("ERROR: Handle was not attached. Reason: %s not available\n", portName);
         }
-        else cout << "Error" << endl;
+    else
+        {
+            printf("ERROR!!!");
+        }
+    }
+    /* Setup serial port parameters in a DCB struct (holds serial port info) */
+    else {
+        DCB dcbSerialParameters = {0};
+
+        if (!GetCommState(this->handler, &dcbSerialParameters)) {
+            printf("failed to get current serial parameters");
+        }
+        else {
+            dcbSerialParameters.BaudRate = CBR_9600;	//setting baudrate = 9600
+            dcbSerialParameters.ByteSize = 8;			//setting bytesize = 8
+            dcbSerialParameters.StopBits = ONESTOPBIT;	//setting stopbits = 1
+            dcbSerialParameters.Parity = NOPARITY;		//setting parity = None
+            dcbSerialParameters.fDtrControl = DTR_CONTROL_ENABLE;
+
+            if (!SetCommState(handler, &dcbSerialParameters))
+            {
+                printf("ALERT: could not set Serial port parameters\n");
+            }
+            else {
+                this->connected = true;
+                PurgeComm(this->handler, PURGE_RXCLEAR | PURGE_TXCLEAR);
+                Sleep(WAIT_TIME);
+            }
+        }
     }
 }
 
@@ -64,7 +78,7 @@ SerialPort::~SerialPort()
 {
     if (this->connected){
         this->connected = false;
-        close(this->handler);		//Closing the serial port
+        CloseHandle(this->handler);		//Closing the serial port
     }
 }
 
@@ -72,7 +86,7 @@ SerialPort::~SerialPort()
  * Functions
  ****************************************************************************/
  
-/* Function Flow
+/* Function flow:
  * --Sets the packet handler for this instance of SerialPort to a user-defined function 
  *
  * Function Params:
@@ -98,7 +112,7 @@ void SerialPort::setPacketHandler(PacketHandlerFunctionWithSender PacketReceived
  *   packet and executes the PacketReceivedFunction.
  * --Returns the number of bytes decoded.
  *
- * Function Params:
+ * Function params:
  * decodeBuffer:	The buffer into which the result will be written
  *
  * Function variables:
@@ -109,31 +123,20 @@ void SerialPort::setPacketHandler(PacketHandlerFunctionWithSender PacketReceived
  */
 int SerialPort::update(uint8_t *decodeBuffer)
 {
-    int		bytesAvailable;
+    DWORD 		bytesRead;
     uint8_t 	data;
     uint8_t* 	data_ptr;
     data_ptr = 	& data;
-    //cout << "HEY" << endl;
-	//bytesAvailable = read(this->handler, data_ptr, 1);
-	//cout << (char) data << endl;
-	
-	//ioctl(this->handler, FIONREAD, &bytesAvailable);
-	//cout << "HUH" << endl;
-	bytesAvailable = read(this->handler, &data, 1);
     
-    if (bytesAvailable > 0)
-	{		
-		// if (testguy > 0)
-		// {
-    		// cout << "HEY" << endl;
-    	// }
-    	//cout << "HII" << endl;
-       	//read(this->handler, data_ptr, 1);
-    	//cout << "HEY" << endl;
-    	// sleep(2);
-       	if (data == PACKETMARKER)
+    ClearCommError(this->handler, &this->errors, &this->status);
+
+    if (this->status.cbInQue > 0)
+	{
+    	ReadFile(this->handler, data_ptr, 1, &bytesRead, NULL);
+    	
+    	// Change to some kind of packetMarker variable later
+    	if (data == PACKETMARKER)
     	{
-    		//cout << "YOOOOOOO" << endl;
     		size_t numDecoded = COBS::decode(_receiveBuffer,
 									         _receiveBufferIndex,
 									    	 decodeBuffer);									    	 					    	 													 	    	 								    	 
@@ -155,7 +158,7 @@ int SerialPort::update(uint8_t *decodeBuffer)
 		}
 		else
 		{
-			if ((_receiveBufferIndex + 1) < MAX_DATA_LENGTH)
+			if ((_receiveBufferIndex + 1) < MAX_PACKET_LENGTH)
 			{
 				_receiveBuffer[_receiveBufferIndex++] = *data_ptr;
 			}
@@ -170,7 +173,7 @@ int SerialPort::update(uint8_t *decodeBuffer)
  *   to the serial line.
  * --Returns TRUE if the write was successful, FALSE if not.
  *
- * Function Params:
+ * Function params:
  * buffer:		The message that you want to encode and send
  * buf_size:	The size of the message in bytes
  *
@@ -182,17 +185,18 @@ int SerialPort::update(uint8_t *decodeBuffer)
  */
 bool SerialPort::send(uint8_t *buffer, size_t buf_size)
 {
-    /* if the message is not empty & the size of the message wasn't 0 by accident */
+    DWORD bytesSend;
+	/* if the message is not empty & the size of the message wasn't 0 by accident */
     if (buffer != 0 && buf_size != 0)
 	{
+        ClearCommError(this->handler, &this->errors, &this->status);
+        
         uint8_t encodedBuffer[COBS::getEncodedBufferSize(buf_size)+1];
 
         size_t numEncoded = COBS::encode(buffer, buf_size, encodedBuffer);
 
-        int guy = write(this->handler, (void*) encodedBuffer, numEncoded + 1);
-        
-		if (guy > 0) cout << "write OK" << endl;
-		//sleep(1);
+        WriteFile(this->handler, (void*) encodedBuffer, numEncoded + 1, &bytesSend, 0);
+
 		/* clear buffer */
 		memset(encodedBuffer, 0, numEncoded + 1);
 		
