@@ -1,7 +1,7 @@
 /* 
  * main.cpp
  *
- * Basics run of input/output for LaunchPad communication. All applicability is 
+ * Basic run of input/output for LaunchPad communication. All applicability is 
  * defined in myprogram.cpp. This file is not intended to be edited.
  *
  * --Serial port name on windows. If, in 'COM#', # is > 9, portName must include 
@@ -27,24 +27,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <chrono>
 
 #include "iProtocol.h"
-#include "../examples/PingAndRead.h"
-#include "../examples/PingAndRead.cpp"
+#include "userTest.h"
 
 using std::cout;
 using std::cin;
 using std::endl;
 
 /* Serial port name: see above */
-const char *port_name = "COM6";
+const char *port_name = "COM7";
 
 /* Name this device */
 housekeeping_id myComputer = eSFC;
 
 /* Declarations to keep track of device list */
 uint8_t downStreamDevices[254] = {0};	// Keep a list of downstream devices
-int numDevices = 0;			// Keep track of how many devices are downstream
+uint8_t numDevices = 0;			// Keep track of how many devices are downstream
+
+/* Keep a log of errors */
+uint8_t errorsReceived[254] = {0};
+uint8_t numErrors = 0;
 
 /* Create buffers for data */
 uint8_t outgoingPacket [MAX_PACKET_LENGTH] = {0};	// Buffer for outgoing packet
@@ -54,9 +58,18 @@ uint8_t incomingPacket [MAX_PACKET_LENGTH] = {0};	// Buffer for incoming packet
  * are being used (see iProtocol.h for declaration)	*/
 housekeeping_hdr_t * hdr_in;
 housekeeping_hdr_t * hdr_out;
+housekeeping_err_t * hdr_err;
 
 /* Checksum value for read-in */
 uint8_t checkin;
+
+/* While connected, variables to check the how long its been since read a byte */
+int read_result = 0;
+std::chrono::time_point<std::chrono::system_clock> newest_zero, newest_result;
+std::chrono::duration<double> elapsed_time; 
+
+/* Bool if a reset needs to happen */
+bool needs_reset = false;
 
 /*******************************************************************************
 * Functions
@@ -70,20 +83,11 @@ uint8_t checkin;
  */
 void setup()
 {
-	/* Point to data in a way that it can be read as a header_hdr_t */
-	hdr_in = (housekeeping_hdr_t *) incomingPacket;	
-	hdr_out = (housekeeping_hdr_t *) outgoingPacket;
-	
-	/* Create the header for the first message */
-	hdr_out->src = myComputer;			// Source of data packet
 	setupMyPacket(hdr_out);	// Fills in rest of header
-	
-	/* Reset number of found devices to 0 */
-	numDevices = 0;
 	
 	/* Compute checksum for outgoing packet + add it to the end of packet */
 	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
-											 outgoingPacket[4 + hdr_out->len]);
+											 &outgoingPacket[4 + hdr_out->len]);
 }
 
 /* Function flow:
@@ -99,7 +103,7 @@ void setup()
  * numDevices:				Running total of downstream devices
  * 
  */
-void commandCentral(const uint8_t * buffer)
+void commandCenter(const uint8_t * buffer)
 {
 	/* Check if the device is already known */
 	if (findMe(downStreamDevices, downStreamDevices+numDevices, hdr_in->src) 
@@ -119,6 +123,10 @@ void commandCentral(const uint8_t * buffer)
 	{
 		whatToDoIfFSR(hdr_in);
 	}
+	else if (hdr_in->cmd == eMapDevices)
+	{
+		whatToDoIfMap(hdr_in);
+	}
 }
 
 /* Function flow:
@@ -133,36 +141,48 @@ void commandCentral(const uint8_t * buffer)
  * len:			Size of the decoded incoming packet
  * 
  */
-void isItMe(const uint8_t * buffer, size_t len)
+void checkHdr(const uint8_t * buffer, size_t len)
 {
-	/* Read in the header */
-	hdr_in->src = buffer[0];
-	hdr_in->dst = buffer[1];
-	hdr_in->cmd = buffer[2];
-	hdr_in->len = buffer[3];
-	
 	/* Check if the message was intended for this device
 	 * If it was, check and execute the command  */
 	if (hdr_in->dst == myComputer)
 	{
+		/* Read in the header */
+		hdr_in->src = buffer[0];
+		hdr_in->dst = buffer[1];
+		hdr_in->cmd = buffer[2];
+		hdr_in->len = buffer[3];
+	
 		/* Check for data corruption */
-		checkin = computeMySum(buffer, buffer[4 + hdr_in->len]);
+		checkin = computeMySum(buffer, &buffer[4 + hdr_in->len]);
 		
 		cout << "The computed checkSum is: " << (int) checkin << endl << endl;
 		
 		if (checkMySum(checkin, buffer[4 + hdr_in->len]))
 		{
-			commandCentral(buffer);
+			commandCenter(buffer);
 		}
 		else cout << "Bummer, checksum did not match." << endl;
 	}
 	
-	/* If it wasn't, we have problems */
+	/* If it wasn't, cast it as an error & restart */
 	else
 	{
-		/* Throw an error */
-		cout << "Error: wrong dst" << endl << endl;
-		return;
+		/* Read in the header */
+		hdr_err->src = buffer[0];
+		hdr_err->dst = buffer[1];
+		hdr_err->cmd = buffer[2];
+		hdr_err->error = buffer[3];
+
+		whatToDoIfError(hdr_err, errorsReceived, numErrors);
+		
+		resetAll(hdr_out);	
+		
+		/* Compute checksum for outgoing packet + add it to the end of packet */
+		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
+											 &outgoingPacket[4 + hdr_out->len]);
+		
+		needs_reset = true;
 	}
 }
 
@@ -172,6 +192,14 @@ void isItMe(const uint8_t * buffer, size_t len)
 *******************************************************************************/
 int main()
 {
+	/* Point to data in a way that it can be read as a header_hdr_t */
+	hdr_in = (housekeeping_hdr_t *) incomingPacket;
+	hdr_err = (housekeeping_err_t *) incomingPacket;
+	hdr_out = (housekeeping_hdr_t *) outgoingPacket;
+	
+	/* Create the header for the first message */
+	hdr_out->src = myComputer;			// Source of data packet
+	
     /* Declare an instance of the serial port connection */
  	SerialPort TM4C(port_name);
  	
@@ -184,30 +212,52 @@ int main()
 	}
   	
 	/* Set the function that will act when a packet is received */
-	TM4C.setPacketHandler(&isItMe);
-	
-	/* Reset number of found devices to 0 */
-	numDevices = 0;
+	TM4C.setPacketHandler(&checkHdr);
 	
 	/* Start up your program & set the outgoing packet data */
 	startUp();
 	setup();
 	
+	/* Reset number of found devices & errors to 0 */
+	memset(downStreamDevices, 0, numDevices);
+	numDevices = 0;
+	memset(errorsReceived, 0, numErrors);
+	numErrors = 0;
+	
 	/* send the header and packet*/
-   	TM4C.send(outgoingPacket, 
-			  sizeof(housekeeping_hdr_t)/sizeof(hdr_out->src) + hdr_out->len + 1); 
+	TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
+	
+	newest_zero = std::chrono::system_clock::now() + (std::chrono::milliseconds) 10000;
+	newest_result = std::chrono::system_clock::now();
 	
 	/* While the serial port is open, */
   	while (TM4C.isConnected())
 	{  	
 		/* Reads in 1 byte at a time until the full packet arrives.
      	 * If a full packet is received, update will execute PacketReceivedFunction */	
-    	int read_result = TM4C.update(incomingPacket);
-    	if (read_result != 0)
-    	{
-    		setup();
-    		TM4C.send(outgoingPacket, 
-			 		  sizeof(housekeeping_hdr_t)/sizeof(hdr_out->src) + hdr_out->len + 1); 
-		}
+		read_result = TM4C.update(incomingPacket);
+		
+		if (read_result > 0) newest_result = std::chrono::system_clock::now();
+		
+		else newest_zero = std::chrono::system_clock::now();
+		
+		elapsed_time = newest_zero - newest_result;
+		
+		if (elapsed_time.count() > .25)
+		{ 
+			/* check if a reset needs to be sent */
+			if (needs_reset)
+			{
+				TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
+				needs_reset = false;
+			}
+			
+			setup();
+			
+			/* send the header and packet*/
+			TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
+			
+			newest_result = std::chrono::system_clock::now();
+		}				
   	}
 }

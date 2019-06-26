@@ -10,14 +10,11 @@
 /*****************************************************************************
  * Defines
  ****************************************************************************/
-#include "PingAndRead.h"
+#include "userTest.h"
 
 using std::cout;
 using std::cin;
 using std::endl;
-
-/* Dummy pointer used in whatToDoIfFSR() and matchData() */
-uint8_t * ptr;
 
 /* User input variables for setupMyPacket() */
 char userIN;
@@ -38,13 +35,38 @@ uint8_t outgoingData [255] = {0};
  */
 void startUp()
 {
-	cout << endl << "Destination typedefs:" << '\t' << '\t' << '\t' << '\t';
+	cout << "#####################################################################";
+	cout << endl;
+	cout << "Destination typedefs:" << '\t' << '\t';
 	cout << "Command typedefs:" << endl;
-	cout << "SFC = 0" << endl;
-	cout << "MainHSK = 1" << '\t' << '\t' << '\t' << '\t';
-	cout << "	Ping Pong = 0" << endl;
-	cout << "MagnetHSK = 2" << '\t' << '\t' << '\t' << '\t';	
-	cout << "	FSR (fake sensor read) = 2" << endl <<endl;	
+	
+	cout << "SFC" << '\t' << '\t' << "0";
+	cout << '\t' <<'\t';
+	cout << "Ping Pong" << '\t' << '\t' << '\t' << "0" << endl;
+	
+	cout << "MainHSK" << '\t' << '\t' << "1";
+	cout << '\t' << '\t';
+	cout << "FSR (fake sensor read)" << '\t' << '\t' << "2" << endl;
+	
+	cout << "MagnetHSK" << '\t' << "2";
+	cout << '\t' << '\t';	
+	cout << "Bad dst Error Test" << '\t' << '\t' << "3" << endl;
+	
+	cout << "eBroadcast" << '\t' << "3";
+	cout << '\t' << '\t';
+	cout << "Bad args Error Test" << '\t' << '\t' << "4" << endl;
+	
+	cout << '\t' << '\t' << '\t' << '\t' << "Map all devices (dst=broadcast) 5";
+	cout << endl << endl;
+
+	cout << "Error codes:" <<  endl;
+	cout << "EBADDEST" << '\t' << "-1" << endl;
+	cout << "EBADCOMMAND" << '\t' << "-2" << endl;
+	cout << "EBADLEN" << '\t' << '\t' << "-3" << endl;
+	cout << "EBADARGS " << '\t' << "-4" << endl;
+	cout << "#####################################################################";
+	cout << endl << endl;
+	
 }
 
 /* Function flow:
@@ -80,6 +102,11 @@ void setupMyPacket(housekeeping_hdr_t * hdr_out)
 			userDST = eMagnetHsk;
 			break;
 		}
+		else if (userIN == '3')
+		{
+			userDST = eBroadcast;
+			break;
+		}
 		else 
 		{
 			cout << "don't think so" << endl << endl;
@@ -89,24 +116,20 @@ void setupMyPacket(housekeeping_hdr_t * hdr_out)
 	}
 	
 	/* Get user input for message command */
-	cout << "What command #? " << endl;
+	cout << "What command #? (between 0 and 9) " << endl;
 	cin >> userIN2;
 	while (userIN2)
 	{
-		if (userIN2 == '0') 
+		if ((int) userIN2 < 58 && (int) userIN2 > 47)
 		{
-			userCMD = ePingPong;
+			userCMD = (housekeeping_cmd) ((int) userIN2 - 48);
 			break;
 		}
-		else if (userIN2 == '2')
-		{
-			userCMD = eFakeSensorRead;
-			break;
-		}
+		
 		else 
 		{
 			cout << "don't think so" << endl;
-			cout << "Command #? " << endl;
+			cout << "Command #? (between 0 and 10)" << endl;
 			cin >> userIN2;
 		}
 	}
@@ -165,14 +188,62 @@ void whatToDoIfFSR(housekeeping_hdr_t * hdr_in)
 	cout << "Length of data attached: " << (int) hdr_in->len << endl;
 	cout << "Fake data: " << endl;
 	
-	ptr = (uint8_t *) hdr_in;
-	
 	for (int i = 0; i < hdr_in->len; i++)
 	{
-		cout << (int) *(ptr+4+i) << ", ";
+		cout << (int) *((uint8_t *) hdr_in+4+i) << ", ";
 	}
 	cout << endl << endl;
 }
+
+void whatToDoIfError(housekeeping_err_t * hdr_err, uint8_t * errors, uint8_t & numError)
+{
+	/* Throw an error */
+	cout << "Error received: Type " << (int) hdr_err->error -256 << endl << endl;
+			
+	/* Log the error */
+	*(errors +4*numError) 	= hdr_err->src;
+	*(errors +4*numError+1) = hdr_err->dst;
+	*(errors +4*numError+2) = hdr_err->cmd;
+	*(errors +4*numError+3) = hdr_err->error;
+	numError+=1;
+	
+	/* Print out error history */
+	cout << "ERROR LOG: Found " << (int) numError << " error(s)" << endl;
+
+	for (int i=0; i<numError; i++)
+	{
+		cout << "Error #" << (i+1) << ": Origin device #";
+		cout << (int) errors[4*i] << endl;
+		cout << "Error #" << (i+1) << ": Intended for device #";
+		cout << (int) errors[4*i+1] << endl;
+		cout << "Error #" << (i+1) << ": With the attached command #";
+		cout << (int) errors[4*i+2] << endl;
+		cout << "Error #" << (i+1) << ": With error code ";
+		cout << (int) errors[4*i+3]-256 << endl << endl;
+	}
+	
+	cout << "Resetting downstream devices..." << endl << endl;
+}
+
+void whatToDoIfMap(housekeeping_hdr_t * hdr_in)
+{
+	cout << "Device #" << (int) hdr_in->src << " has attached devices:" << endl;
+	
+	for (int i=0; i < hdr_in->len; i++)
+	{
+		cout << (int) *((uint8_t *) hdr_in + 4 + i) << endl;
+	}
+	cout << endl;
+}
+
+void resetAll(housekeeping_hdr_t * hdr_out)
+{
+	hdr_out->dst = eBroadcast;
+	hdr_out->cmd = eReset;
+	hdr_out->len = 0;
+}
+
+
 
 /* Function flow:
  * --Matches an array of data with the (global) outgoingPacket data slots
@@ -189,10 +260,8 @@ void whatToDoIfFSR(housekeeping_hdr_t * hdr_in)
  */
 void matchData(housekeeping_hdr_t * hdr_out)
 {
-	ptr = (uint8_t *) hdr_out;
-	
 	for (int i = 0; i < hdr_out->len; i++)
 	{
-		*(ptr+4+i) = outgoingData[i];
+		*((uint8_t *) hdr_out+4+i) = outgoingData[i];
 	}
 }

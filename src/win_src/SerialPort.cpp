@@ -163,6 +163,7 @@ int SerialPort::update(uint8_t *decodeBuffer)
 				_receiveBuffer[_receiveBufferIndex++] = *data_ptr;
 			}
 		}
+		return 1;
 	}
 
     return 0;

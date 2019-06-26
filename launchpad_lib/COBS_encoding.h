@@ -11,7 +11,7 @@
 
 #include "Arduino.h"
 
-#define PACKETMARKER 48
+#define PACKETMARKER 0
 
 
 /// \brief A Consistent Overhead Byte Stuffing (COBS) Encoder.

@@ -30,19 +30,18 @@ uint8_t checkDat = 0;
  * Function Params:
  * first:		The location of the first byte in the data packet
  * last:		The location of the last byte in the data packet	
- *				--This is passed by reference, need to fix for consistency
  *
  * Function variables:
  * checkDat:	The running total of summed bytes in the packet
  *
  */
 
-uint8_t computeMySum(const uint8_t * first, const uint8_t & last)
+uint8_t computeMySum(const uint8_t * first, const uint8_t * last)
 {
 	checkDat = 0;
-	while (first!= &last)	
+	while (first!= last)	
 	{
-		checkDat += *first;
+		checkDat -= *first;
 		++first;
 	}
 	return checkDat;

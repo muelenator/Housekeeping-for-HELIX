@@ -11,7 +11,7 @@
 /* !!! Packet marker for COBS encoding. Make sure that the Energia library's 
  *	   packet marker matches this value, or the encoding can't be read by either
  */
-#define PACKETMARKER 48
+#define PACKETMARKER 0
 
 #include <stdio.h>
 #include <stdlib.h>

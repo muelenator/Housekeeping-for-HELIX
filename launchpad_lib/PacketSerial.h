@@ -1,8 +1,8 @@
 #pragma once
 /* Max data length is: 
- *	--4 header bytes
- *	-- + 255 data bytes
- *  -- + 1 CRC (checksum) byte
+ *	-- +4 header bytes
+ *	-- +255 data bytes
+ *  -- +1 CRC (checksum) byte
  * For max packet size, 
  *	-- +1 COBS overhead
  *	-- +1 COBS packet marker
@@ -12,7 +12,6 @@
 #include <Arduino.h>
 #include "COBS_encoding.h"
 
-template<typename EncoderType, uint8_t PacketMarker = PACKETMARKER, size_t BufferSize = MAX_PACKET_LENGTH>
 class PacketSerial_
 {
 public:
@@ -108,7 +107,7 @@ public:
                 {
                     uint8_t _decodeBuffer[_receiveBufferIndex];
 
-                    size_t numDecoded = EncoderType::decode(_receiveBuffer,
+                    size_t numDecoded = COBS::decode(_receiveBuffer,
                                                             _receiveBufferIndex,
                                                             _decodeBuffer);
 
@@ -126,7 +125,7 @@ public:
             }
             else
             {
-                if ((_receiveBufferIndex + 1) < BufferSize)
+                if ((_receiveBufferIndex + 1) < MAX_PACKET_LENGTH)
                 {
                     _receiveBuffer[_receiveBufferIndex++] = data;
                 }
@@ -142,14 +141,14 @@ public:
     {
         if(_stream == nullptr || buffer == nullptr || size == 0) return;
 
-        uint8_t _encodeBuffer[EncoderType::getEncodedBufferSize(size)];
+        uint8_t _encodeBuffer[COBS::getEncodedBufferSize(size)];
 
-        size_t numEncoded = EncoderType::encode(buffer,
+        size_t numEncoded = COBS::encode(buffer,
                                                 size,
                                                 _encodeBuffer);
 
         _stream->write(_encodeBuffer, numEncoded);
-        _stream->write(PacketMarker);
+        _stream->write((uint8_t) PACKETMARKER);
     }
 
     void setPacketHandler(PacketHandlerFunction onPacketFunction)
@@ -168,7 +167,7 @@ private:
     PacketSerial_(const PacketSerial_&);
     PacketSerial_& operator = (const PacketSerial_&);
 
-    uint8_t _receiveBuffer[BufferSize];
+    uint8_t _receiveBuffer[MAX_PACKET_LENGTH];
     size_t _receiveBufferIndex = 0;
 
     Stream* _stream = nullptr;
@@ -179,4 +178,4 @@ private:
 
 
 /// \brief A typedef for the default COBS PacketSerial class.
-typedef PacketSerial_<COBS> PacketSerial;
+typedef PacketSerial_ PacketSerial;
