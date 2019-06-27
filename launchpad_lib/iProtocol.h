@@ -59,9 +59,9 @@ typedef enum housekeeping_cmd
 typedef enum housekeeping_prio_type
 {
 	eNoPriority = 0,
-	eLowPriority = 0,
-	eMedPriority = 0,
-	eHiPriority = 0
+	eLowPriority = 1,
+	eMedPriority = 2,
+	eHiPriority = 3
 } housekeeping_prio_type_t;
 
 
@@ -113,3 +113,4 @@ uint8_t * findMe(uint8_t * first, uint8_t * last, uint8_t address);
 extern housekeeping_hdr_t * hdr_in;		// pointer for loc of incoming data header
 extern housekeeping_hdr_t * hdr_out;	// pointer for loc of outgoing header
 extern housekeeping_err_t * hdr_err;	// pointer for loc of error header 
+extern housekeeping_prio_t * hdr_prio;	// pointer for loc of priority header

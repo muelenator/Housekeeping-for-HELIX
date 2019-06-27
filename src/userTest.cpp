@@ -17,13 +17,42 @@ using std::cin;
 using std::endl;
 
 /* User input variables for setupMyPacket() */
-char userIN;
-char userIN2;
+housekeeping_id userIN;
 housekeeping_id userDST;
+housekeeping_cmd userIN2;
 housekeeping_cmd userCMD;
+housekeeping_cmd userSETCMD;
+housekeeping_prio_type userPRIO;
 
 /* Buffer for outgoing data in setupMyPacket(). This can be changed if  */
 uint8_t outgoingData [255] = {0};
+
+/* Modified >> operator so that the user can input commands & destinations */
+std::istream& operator>>(std::istream& is, housekeeping_id& guy)
+{
+    int a;
+    is >> a;
+    guy = static_cast<housekeeping_id>(a);
+
+    return is;
+}
+std::istream& operator>>(std::istream& is, housekeeping_cmd& guy)
+{
+    int a;
+    is >> a;
+    guy = static_cast<housekeeping_cmd>(a);
+
+    return is;
+}
+
+std::istream& operator>>(std::istream& is, housekeeping_prio_type& guy)
+{
+    int a;
+    is >> a;
+    guy = static_cast<housekeeping_prio_type>(a);
+
+    return is;
+}
 
 /*****************************************************************************
  * Functions
@@ -42,28 +71,61 @@ void startUp()
 	
 	cout << "SFC" << '\t' << '\t' << "0";
 	cout << '\t' <<'\t';
-	cout << "Ping Pong" << '\t' << '\t' << '\t' << "0" << endl;
+	cout << "ePingPong" << '\t' << '\t' << '\t' << "0" << endl;
 	
 	cout << "MainHSK" << '\t' << '\t' << "1";
 	cout << '\t' << '\t';
-	cout << "FSR (fake sensor read)" << '\t' << '\t' << "2" << endl;
+	cout << "eSetPriority" << '\t' << '\t' << '\t' << "1" << endl;
 	
 	cout << "MagnetHSK" << '\t' << "2";
 	cout << '\t' << '\t';	
-	cout << "Bad dst Error Test" << '\t' << '\t' << "3" << endl;
+	cout << "Fake Sensor Read" << '\t' << '\t' << "2" << endl;
 	
-	cout << "eBroadcast" << '\t' << "3";
+	cout << "eBroadcast" << '\t' << "255";
 	cout << '\t' << '\t';
-	cout << "Bad args Error Test" << '\t' << '\t' << "4" << endl;
+	cout << "Bad destination error test" << '\t' << "3" << endl;
 	
-	cout << '\t' << '\t' << '\t' << '\t' << "Map all devices (dst=broadcast) 5";
+	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "Bad arguments error test" << '\t' << "4" << endl;
+	
+	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "Map all devices (dst=broadcast) 5" << endl;
+	
+	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "eSendLowPriority" << '\t' << '\t' << "250" << endl;
+	
+	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "eSendMedPriority" << '\t' << '\t' << "251" << endl;
+	
+	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "eSendHiPriority" << '\t' << '\t' << '\t' << "252" << endl;
+	
+	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "eSendAll" << '\t' << '\t' << '\t' << "253" << endl;
+	
+	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "Reset" << '\t' << '\t' << '\t' << '\t' << "254" << endl;
+	
+	
 	cout << endl << endl;
 
-	cout << "Error codes:" <<  endl;
-	cout << "EBADDEST" << '\t' << "-1" << endl;
-	cout << "EBADCOMMAND" << '\t' << "-2" << endl;
-	cout << "EBADLEN" << '\t' << '\t' << "-3" << endl;
-	cout << "EBADARGS " << '\t' << "-4" << endl;
+	cout << "Error codes:" <<  '\t' << '\t' << '\t' << "Priority typedefs: " << endl;
+	
+	cout << "EBADDEST" << '\t' << "-1";
+	cout << '\t' << '\t';
+	cout << "No Priority" << '\t' << '\t' << '\t' << "0" << endl;
+	
+	cout << "EBADCOMMAND" << '\t' << "-2";
+	cout << '\t' << '\t';
+	cout << "Low Priority" << '\t' << '\t' << '\t' << "1" << endl;
+	
+	cout << "EBADLEN" << '\t' << '\t' << "-3";
+	cout << '\t' << '\t';
+	cout << "Med Priority" << '\t' << '\t' << '\t' << "2" << endl;
+	
+	cout << "EBADARGS " << '\t' << "-4";
+	cout << '\t' << '\t';
+	cout << "High Priority" << '\t' << '\t' << '\t' << "3" << endl;
 	cout << "#####################################################################";
 	cout << endl << endl;
 	
@@ -84,52 +146,47 @@ void startUp()
  * userDST:		User inputted destination that is put in the outgoing packet
  * userCMD:		User inputted command that is put in the outgoing packet
  *
+ * If the user wants to change priority of a command, two more variables are 
+ * required.
+ * userSETCMD:	User inputted command whose priority they want changed
+ * userPRIO:	User inputted priority for the above command
+ *
  */
-void setupMyPacket(housekeeping_hdr_t * hdr_out)
+void setupMyPacket(housekeeping_hdr_t * hdr_out, housekeeping_prio_t * hdr_prio)
 {	
 	/* Get user input for message destination */
 	cout << "Destination #? " << endl;
 	cin >> userIN;
-	while (userIN)
+	while (cin)
 	{
-		if (userIN == '1') 
+		if ((int) userIN <= 255 && (int) userIN >= 0)
 		{
-			userDST = eMainHsk;
-			break;
-		}
-		else if (userIN == '2')
-		{
-			userDST = eMagnetHsk;
-			break;
-		}
-		else if (userIN == '3')
-		{
-			userDST = eBroadcast;
+			userDST = userIN;
 			break;
 		}
 		else 
 		{
-			cout << "don't think so" << endl << endl;
+			cout << "Not a valid destination." << endl << endl;
 			cout << "Destination #? " << endl;
 			cin >> userIN;
 		}
 	}
 	
 	/* Get user input for message command */
-	cout << "What command #? (between 0 and 9) " << endl;
+	cout << "What command #? " << endl;
 	cin >> userIN2;
-	while (userIN2)
+	while (cin)
 	{
-		if ((int) userIN2 < 58 && (int) userIN2 > 47)
+		if ((int) userIN2 <= 255 && (int) userIN2 >= 0)
 		{
-			userCMD = (housekeeping_cmd) ((int) userIN2 - 48);
+			userCMD = userIN2;
 			break;
 		}
 		
 		else 
 		{
-			cout << "don't think so" << endl;
-			cout << "Command #? (between 0 and 10)" << endl;
+			cout << "Not a valid command" << endl;
+			cout << "Command #? " << endl;
 			cin >> userIN2;
 		}
 	}
@@ -140,6 +197,48 @@ void setupMyPacket(housekeeping_hdr_t * hdr_out)
 	hdr_out->dst = userDST;			// Intended destination of packet
 	hdr_out->cmd = userCMD;			// Command for what do to with packet
 	hdr_out->len = 0;				// Size of data after the header
+	
+	/* If the set priority command was called... */
+	if ((int) userCMD == 1)
+	{
+		cout << "Set Priority chosen. What command # to set? " << endl;
+		cin >> userSETCMD;
+		while (cin)
+		{
+			if ((int) userSETCMD <= 249 && (int) userSETCMD >= 0)
+			{
+				break;
+			}
+			else 
+			{
+				cout << "Not a valid command to set." << endl << endl;
+				cout << "Command # to set? " << endl;
+				cin >> userSETCMD;
+			}
+		}
+		
+		/* Get user input for message command */
+		cout << "What priority # should this command have? " << endl;
+		cin >> userPRIO;
+		while (cin)
+		{
+			if ((int) userPRIO <= 3 && (int) userPRIO >= 0)
+			{
+				break;
+			}
+			
+			else 
+			{
+				cout << "Not a valid priority." << endl;
+				cout << "Priority #? " << endl;
+				cin >> userPRIO;
+			}
+		}
+		
+		outgoingData[0] = userSETCMD;
+		outgoingData[1] = userPRIO;
+		hdr_out->len = 2;
+	}
 	
 	/* Option to match data, if wanted to populate outgoingData ahead of time */
 	matchData(hdr_out);
@@ -163,6 +262,22 @@ void whatToDoIfPingPong(housekeeping_hdr_t * hdr_in)
 	cout << "Command : " << (int) hdr_in->cmd << endl;
 	cout << "Length of data attached: " << (int) hdr_in->len << endl << endl;
 	cout << endl << endl;
+}
+
+/* Function flow:
+ * --If a device has successfully changed priority of a command, it should have
+ *   attached two bytes that describe the command changed and its new priority
+ *
+ * Function params:
+ * hdr_in:		Pointer to the first byte of the incoming packet
+ * hdr_prio:	Pointer to the first byte of the priority change information
+
+ */
+void whatToDoIfSetPriority(housekeeping_hdr_t * hdr_in, housekeeping_prio_t * hdr_prio)
+{
+	cout << "Device #" << (int) hdr_in->src;
+	cout << " has successfully changed command #" << (int) hdr_prio->command;
+	cout << " to priority #" << (int) hdr_prio->prio_type << "." << endl;
 }
 
 /* Function flow:
@@ -195,6 +310,16 @@ void whatToDoIfFSR(housekeeping_hdr_t * hdr_in)
 	cout << endl << endl;
 }
 
+/* Function flow:
+ * --Function logs any errors it receives. It displays the last error type it 
+ *   received and prints out a log of all errors in this program's instance
+ *
+ * Function params:
+ * hdr_err:		Pointer to the first byte of the error diagnostic received
+ * errors:		Array of past errors. The current error gets put in the array
+ * numErrors:	Number of errors total
+ *
+ */
 void whatToDoIfError(housekeeping_err_t * hdr_err, uint8_t * errors, uint8_t & numError)
 {
 	/* Throw an error */
@@ -225,6 +350,14 @@ void whatToDoIfError(housekeeping_err_t * hdr_err, uint8_t * errors, uint8_t & n
 	cout << "Resetting downstream devices..." << endl << endl;
 }
 
+/* Function flow:
+ * --If a device receives this command, it should send back the number of devices
+ *   it has attached and their respective addresses. This function prints both 
+ *
+ * Function params:
+ * hdr_in:		Pointer to the first byte of the incoming packet
+ *
+ */
 void whatToDoIfMap(housekeeping_hdr_t * hdr_in)
 {
 	cout << "Device #" << (int) hdr_in->src << " has attached devices:" << endl;
@@ -236,13 +369,19 @@ void whatToDoIfMap(housekeeping_hdr_t * hdr_in)
 	cout << endl;
 }
 
+/* Function flow:
+ * --Sets the outgoing header so that all devices receive the eReset command.
+ *
+ * Function params:
+ * hdr_out: 		Pointer to the first byte of the outgoing packet
+ *
+ */
 void resetAll(housekeeping_hdr_t * hdr_out)
 {
 	hdr_out->dst = eBroadcast;
 	hdr_out->cmd = eReset;
 	hdr_out->len = 0;
 }
-
 
 
 /* Function flow:

@@ -1,7 +1,6 @@
 #include <PacketSerial.h>
 #include <iProtocol.h>
 #include <CommandResponse.h>
-// #include <SoftReset>
 
 /* Declare an instance of PacketSerial to set up the serial bus */
 PacketSerial upStream1;
@@ -10,27 +9,29 @@ PacketSerial downStream1;
 /*******************************************************************************
 * Defines
 *******************************************************************************/
-
-/* Name this device */
+/* Name of this device */
 housekeeping_id myID = eMainHsk;
 
-/* Declarations to keep track of device list */
-uint8_t downStreamDevices[254] = {0};	// Keep a list of downstream devices
-uint8_t numDevices = 0;			// Keep track of how many devices are downstream
-
-/* Create buffers for data */
+/* Create buffers for incoming/outgoing packets */
 uint8_t outgoingPacket [MAX_PACKET_LENGTH]; 	// Buffer for outgoing packet
-uint8_t incomingPacket [MAX_PACKET_LENGTH];	// Buffer for incoming packet
+uint8_t incomingPacket [MAX_PACKET_LENGTH];		// Buffer for incoming packet
 
-/* Guess: defining the variable here makes the linker connect where these
- * 		  variables are being used 	*/
+/* Memory buffers for housekeeping system functions */
+uint8_t downStreamDevices[254] = {0};	// Keep a list of downstream devices
+uint8_t numDevices = 0;					// Keep track of how many devices are downstream
+uint8_t commandPriority[255] = {0};		// Each command's priority takes up one byte
+
+/* Utility variables for internal use */
+uint8_t checkin;		// Used for comparing checksum values
+size_t hdr_size = sizeof(housekeeping_hdr_t)/sizeof(hdr_out->src); // size of the header
+uint8_t numSends = 0;	// Used to keep track of number of priority commands executed
+
+/* Defining the variable here makes the linker connect where these variables 
+ * are being used (see iProtocol.h for declaration)	*/
 housekeeping_hdr_t * hdr_in;
 housekeeping_hdr_t * hdr_out;
-
-size_t hdr_size = sizeof(housekeeping_hdr_t)/sizeof(hdr_out->src);
-
-/* Checksum values */
-uint8_t checkin;
+housekeeping_err_t * hdr_err;
+housekeeping_prio_t * hdr_prio;
 
 /*******************************************************************************
 * Main program
@@ -48,13 +49,15 @@ void setup()
 	/* Point to data in a way that it can be read as a header_hdr_t */
 	hdr_in = (housekeeping_hdr_t *) incomingPacket;	
 	hdr_out = (housekeeping_hdr_t *) outgoingPacket;
+	hdr_err = (housekeeping_err_t *) (outgoingPacket + hdr_size);
+	hdr_prio = (housekeeping_prio_t *) (incomingPacket + hdr_size);
 }
 
 void loop()
 {
 	/* Continuously read in one byte at a time until a packet is received */
-	upStream1.update();
-	downStream1.update();
+	upStream1.update(incomingPacket);
+	downStream1.update(incomingPacket);
 }
 
 /*******************************************************************************
@@ -62,15 +65,14 @@ void loop()
 *******************************************************************************/
 /* To be executed when a packet is received */
 void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
-{
-    /* Read in the header */
-	hdr_in->src = buffer[0];
-	hdr_in->dst = buffer[1];
-	hdr_in->cmd = buffer[2];
-	hdr_in->len = buffer[3];
+{	
+	/* Default header & error data values */
+	hdr_out->src = myID;	// Source of data packet
 	
-	/* Check if the message was intended for this device
-	 * If it was, check and execute the command  */
+	if (hdr_in->dst == eBroadcast) hdr_err->dst = myID;
+	else hdr_err->dst = hdr_in->dst;	// If an error occurs at this device from a message
+	
+	/* Check if the message is for this device. If so, check & execute command */
 	if (hdr_in->dst == myID || hdr_in->dst == eBroadcast)
 	{
 		/* Check for data corruption */
@@ -84,21 +86,55 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 				downStream1.send(buffer, len);
 			}
 			
-			commandCenter(buffer);
+			/* If a send all priority command is received */
+			if ((int) hdr_in->cmd < 253 && (int) hdr_in->cmd >= 250)
+			{
+				numSends = 0;
+				/* Execute all commands of that type */
+				for (int i = 0; i < 255; i++)
+				{
+					if (commandPriority[i] == (int) hdr_in->cmd -249)
+					{
+						hdr_in->cmd = (uint8_t) i;
+						commandCenter();
+						numSends++;
+					}
+				}
+				/* If there are no commands of that type & the destination isn't eBroadcast*/
+				if (checkThatPriority(hdr_in, hdr_out, numSends))
+				{
+					outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
+																&outgoingPacket[hdr_size+hdr_out->len]);
+					upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+				}
+			}
+			/* If a send all command is received */
+			else if (hdr_in->cmd == eSendAll)
+			{
+				for (int i = 2; i < 6; i++)
+				{
+					hdr_in->cmd = (uint8_t) i;
+					commandCenter();
+				}
+			}
+			/* Otherwise just execute the command */
+			else commandCenter();
 		}
+		
+		/* If the checksum didn't match, throw a bad args error */
 		else
 		{
-			error_badargs(hdr_in,(housekeeping_err_t *) hdr_out);	
-			outgoingPacket[4] = computeMySum(outgoingPacket, &outgoingPacket[4]);
-			
-			upStream1.send(outgoingPacket, hdr_size+1);
+			error_badArgs(hdr_in, hdr_out, hdr_err);	
+			outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
+															       &outgoingPacket[hdr_size+hdr_out->len]);
+			upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 		}
 	}
   
-	/* If it wasn't, pass along the header */
+	/* If the message wasn't meant for this device pass it along */
 	else 
 	{
-		/* Check who sent it (maybe?) */
+		/* Check who sent it */
 		if (sender == &downStream1)
 		{
 			/* Send up stream towards SFC */
@@ -112,24 +148,26 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 		else
 		{
 			/* Throw an error */
-			error_baddest(hdr_in,(housekeeping_err_t *) hdr_out);
-			outgoingPacket[4] = computeMySum(outgoingPacket, &outgoingPacket[4]);
-			upStream1.send(outgoingPacket, hdr_size+1);
-			return;
+			error_badDest(hdr_in, hdr_out, hdr_err);
+			outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
+															       &outgoingPacket[hdr_size+hdr_out->len]);
+			upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 		}
 	}
 }
 
 /* Sorts through commands */
-void commandCenter(const uint8_t * packet)
+void commandCenter()
 {
-	/* Create the header */
-	hdr_out->src = myID;	// Source of data packet
-	
 	/* Check commands */
 	if (hdr_in->cmd == ePingPong)
 	{
 		whatToDoIfPingPong(hdr_out);
+	}
+	
+	else if (hdr_in->cmd == eSetPriority)
+	{
+		whatToDoIfSetPriority(hdr_prio, hdr_out, commandPriority);
 	}
 	
 	else if (hdr_in->cmd == eFakeSensorRead)
@@ -139,30 +177,12 @@ void commandCenter(const uint8_t * packet)
 	
 	else if (hdr_in->cmd == eFakeError1)
 	{
-		error_baddest(hdr_in, (housekeeping_err_t *) hdr_out);
-		
-		hdr_out->src = hdr_in->src;
-		hdr_out->dst = myID;
-		hdr_out->cmd = hdr_in->cmd;
-		hdr_out->len = (uint8_t) EBADDEST;
-		
-		outgoingPacket[4] = computeMySum(outgoingPacket, &outgoingPacket[4]);
-		upStream1.send(outgoingPacket, hdr_size+1);
-		return;
+		error_badDest(hdr_in, hdr_out, hdr_err);
 	}
 	
 	else if (hdr_in->cmd == eFakeError2)
 	{
-		error_badargs(hdr_in, (housekeeping_err_t *) hdr_out);
-		
-		hdr_out->src = hdr_in->src;
-		hdr_out->dst = myID;
-		hdr_out->cmd = hdr_in->cmd;
-		hdr_out->len = (uint8_t) EBADARGS;
-		
-		outgoingPacket[4] = computeMySum(outgoingPacket, &outgoingPacket[4]);
-		upStream1.send(outgoingPacket, hdr_size+1);
-		return;
+		error_badArgs(hdr_in, hdr_out, hdr_err);
 	}
 	
 	else if (hdr_in->cmd == eMapDevices)
@@ -173,24 +193,20 @@ void commandCenter(const uint8_t * packet)
 	else if (hdr_in->cmd == eReset)
 	{
 		memset(downStreamDevices, 0, numDevices);
+		memset(commandPriority, 0 , 255);
 		numDevices = 0;
 		// sysCtlReset();
 		return;
 	}
-	
+	/* Else this is not a programmed command on this device. Throw error */
 	else
 	{
-		error_badargs(hdr_in,(housekeeping_err_t *) hdr_out);
-		
-		outgoingPacket[4] = computeMySum(outgoingPacket, &outgoingPacket[4]);
-		upStream1.send(outgoingPacket, hdr_size+1);
-		return;
+		error_badCommand(hdr_in, hdr_out, hdr_err);
 	}
 	
-	/* Compute checksum */
-	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
-										   &outgoingPacket[4+hdr_out->len]);
-	/* Send out */
+	/* Compute checksum & send out packet */
+	outgoingPacket[hdr_size+hdr_out->len] = computeMySum(outgoingPacket, 
+														 &outgoingPacket[hdr_size+hdr_out->len]);
 	upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 }
 
@@ -208,7 +224,7 @@ void forwardDown(const uint8_t * buffer, size_t len)
 	if (!checkDownBoundDst()) downStream1.send(buffer,len);
 }
 
-/* If the device isn't already known, add it to the list */
+/* If the device isn't already known, add it to the list of known devices */
 void checkUpBoundDst()
 {
 	if (findMe(downStreamDevices, downStreamDevices + numDevices, 
@@ -222,14 +238,14 @@ void checkUpBoundDst()
 /* Check if the intended device is attached */
 bool checkDownBoundDst()
 {
-	if (findMe(downStreamDevices, downStreamDevices + numDevices, 
-			hdr_in->dst) == downStreamDevices + numDevices)
+	if (findMe(downStreamDevices, downStreamDevices + numDevices, hdr_in->dst) 
+				== downStreamDevices + numDevices)
 	{
 		/* Throw an error */
-		error_baddest(hdr_in,(housekeeping_err_t *) hdr_out);
-		outgoingPacket[4] = computeMySum(outgoingPacket, &outgoingPacket[4]);
-		/* Send out */
-		upStream1.send(outgoingPacket, hdr_size + 1);
+		error_badDest(hdr_in, hdr_out, hdr_err);
+		outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
+														       &outgoingPacket[hdr_size+hdr_out->len]);
+		upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 		return true;
 	}
 	else return false;

@@ -93,7 +93,7 @@ public:
         _stream = stream;
     }
 
-    void update()
+    void update(uint8_t * _decodeBuffer)
     {
         if (_stream == nullptr) return;
 
@@ -105,8 +105,6 @@ public:
             {
                 if (_onPacketFunction || _onPacketFunctionWithSender)
                 {
-                    uint8_t _decodeBuffer[_receiveBufferIndex];
-
                     size_t numDecoded = COBS::decode(_receiveBuffer,
                                                             _receiveBufferIndex,
                                                             _decodeBuffer);
@@ -167,7 +165,7 @@ private:
     PacketSerial_(const PacketSerial_&);
     PacketSerial_& operator = (const PacketSerial_&);
 
-    uint8_t _receiveBuffer[MAX_PACKET_LENGTH];
+	uint8_t _receiveBuffer[MAX_PACKET_LENGTH] = {0};
     size_t _receiveBufferIndex = 0;
 
     Stream* _stream = nullptr;

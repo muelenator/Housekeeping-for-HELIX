@@ -2,7 +2,8 @@
  * main.cpp
  *
  * Basic run of input/output for LaunchPad communication. All applicability is 
- * defined in myprogram.cpp. This file is not intended to be edited.
+ * defined in userTest.cpp. Only the USB port address is intended to be editted
+ * in this file.
  *
  * --Serial port name on windows. If, in 'COM#', # is > 9, portName must include 
  * 	 these backslashes: '\\\\.\\COM#' 
@@ -59,8 +60,9 @@ uint8_t incomingPacket [MAX_PACKET_LENGTH] = {0};	// Buffer for incoming packet
 housekeeping_hdr_t * hdr_in;
 housekeeping_hdr_t * hdr_out;
 housekeeping_err_t * hdr_err;
+housekeeping_prio_t * hdr_prio;
 
-/* Checksum value for read-in */
+/* Utility variable: Checksum value for read-in */
 uint8_t checkin;
 
 /* While connected, variables to check the how long its been since read a byte */
@@ -75,15 +77,14 @@ bool needs_reset = false;
 * Functions
 *******************************************************************************/
 /* Function flow:
- * --Labels the first 4 bytes of the incoming & outgoing data buffers as data headers
- * --Labels this computer's source for outgoing packets
+ * --Gets outgoing header from the userTest function 'setupMyPacket'
  * --Computes the checksum of the outgoing data + attaches it to the end of the 
  * 	 message.
  *
  */
 void setup()
 {
-	setupMyPacket(hdr_out);	// Fills in rest of header
+	setupMyPacket(hdr_out, hdr_prio);	// Fills in rest of header
 	
 	/* Compute checksum for outgoing packet + add it to the end of packet */
 	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
@@ -119,6 +120,10 @@ void commandCenter(const uint8_t * buffer)
 	{
 		whatToDoIfPingPong(hdr_in);
 	}
+	else if (hdr_in->cmd == eSetPriority)
+	{
+		whatToDoIfSetPriority(hdr_in, hdr_prio);
+	}
 	else if (hdr_in->cmd == eFakeSensorRead)
 	{
 		whatToDoIfFSR(hdr_in);
@@ -127,11 +132,28 @@ void commandCenter(const uint8_t * buffer)
 	{
 		whatToDoIfMap(hdr_in);
 	}
+	else if ((int) hdr_in->cmd < eSendAll && (int) hdr_in->cmd >= eSendLowPriority
+			 && hdr_in->len == 0)
+	{
+		cout << "Device#" << (int) hdr_in->src;
+		cout << " did not have any data of this priority." << endl << endl;
+	}
+	else if (hdr_in->cmd == eError)
+	{		
+		whatToDoIfError(hdr_err, errorsReceived, numErrors);
+		
+		resetAll(hdr_out);	
+		
+		/* Compute checksum for outgoing packet + add it to the end of packet */
+		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
+											 &outgoingPacket[4 + hdr_out->len]);
+		
+		needs_reset = true;
+	}
 }
 
 /* Function flow:
  * --Called when a packet is received by the serial port instance
- * --Labels the first 4 bytes of the packet as data header constituents
  * --Checks to see if the packet is meant for this device
  *		--If so, check the checksum for data corruption + 
  *		  execute the command in the header
@@ -139,6 +161,9 @@ void commandCenter(const uint8_t * buffer)
  * Function params:
  * buffer:		Pointer to the location of the incoming packet
  * len:			Size of the decoded incoming packet
+ *
+ * Function variables:
+ * checkin:		Utility variable to store a checksum in
  * 
  */
 void checkHdr(const uint8_t * buffer, size_t len)
@@ -147,12 +172,6 @@ void checkHdr(const uint8_t * buffer, size_t len)
 	 * If it was, check and execute the command  */
 	if (hdr_in->dst == myComputer)
 	{
-		/* Read in the header */
-		hdr_in->src = buffer[0];
-		hdr_in->dst = buffer[1];
-		hdr_in->cmd = buffer[2];
-		hdr_in->len = buffer[3];
-	
 		/* Check for data corruption */
 		checkin = computeMySum(buffer, &buffer[4 + hdr_in->len]);
 		
@@ -168,13 +187,7 @@ void checkHdr(const uint8_t * buffer, size_t len)
 	/* If it wasn't, cast it as an error & restart */
 	else
 	{
-		/* Read in the header */
-		hdr_err->src = buffer[0];
-		hdr_err->dst = buffer[1];
-		hdr_err->cmd = buffer[2];
-		hdr_err->error = buffer[3];
-
-		whatToDoIfError(hdr_err, errorsReceived, numErrors);
+		cout << "Bad destination received... Restarting downstream devices." << endl;
 		
 		resetAll(hdr_out);	
 		
@@ -192,10 +205,11 @@ void checkHdr(const uint8_t * buffer, size_t len)
 *******************************************************************************/
 int main()
 {
-	/* Point to data in a way that it can be read as a header_hdr_t */
+	/* Point to data in a way that it can be read as known data structures */
 	hdr_in = (housekeeping_hdr_t *) incomingPacket;
-	hdr_err = (housekeeping_err_t *) incomingPacket;
 	hdr_out = (housekeeping_hdr_t *) outgoingPacket;
+	hdr_err = (housekeeping_err_t *) (incomingPacket+4);
+	hdr_prio = (housekeeping_prio_t *) (incomingPacket+4);
 	
 	/* Create the header for the first message */
 	hdr_out->src = myComputer;			// Source of data packet
@@ -218,15 +232,16 @@ int main()
 	startUp();
 	setup();
 	
-	/* Reset number of found devices & errors to 0 */
+	/* On startup: Reset number of found devices & errors to 0 */
 	memset(downStreamDevices, 0, numDevices);
 	numDevices = 0;
 	memset(errorsReceived, 0, numErrors);
 	numErrors = 0;
 	
-	/* send the header and packet*/
+	/* send the header and packet formed from 'setup' */
 	TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
 	
+	/* Initialize timing variables for when the last message was received */
 	newest_zero = std::chrono::system_clock::now() + (std::chrono::milliseconds) 10000;
 	newest_result = std::chrono::system_clock::now();
 	
@@ -237,12 +252,17 @@ int main()
      	 * If a full packet is received, update will execute PacketReceivedFunction */	
 		read_result = TM4C.update(incomingPacket);
 		
+		/* If a packet was decoded, mark down the time it happened */
 		if (read_result > 0) newest_result = std::chrono::system_clock::now();
 		
+		/* If a packet wasn't decoded in this run, write down the current time */
 		else newest_zero = std::chrono::system_clock::now();
 		
+		/* Using the above variable definitions, calculate how long its been since
+		 * something has been decoded */
 		elapsed_time = newest_zero - newest_result;
 		
+		/* If that ^ time is greater than 1/4 a second, prompt the user again */
 		if (elapsed_time.count() > .25)
 		{ 
 			/* check if a reset needs to be sent */
