@@ -34,31 +34,16 @@ public:
     ~SerialPort();
 
 	/* Define functions that SerialPort will use */
-    int update(uint8_t *buffer);
-    bool send(uint8_t *buffer, size_t buf_size);
+	int readSerialPort(char *buffer);
+	bool writeSerialPort(char *buffer, unsigned int buf_size);
     bool isConnected();
     
     /* typdefs for On-package-received function */
-    typedef void (*PacketHandlerFunction)(const uint8_t * buffer,
-										  size_t size);										  
-	typedef void (*PacketHandlerFunctionWithSender)(const void * sender,
-													const uint8_t * buffer,
-													size_t size);
-	
-	/* Functions for setting the packet handler	*/											
-	void setPacketHandler(PacketHandlerFunction PacketReceivedFunction);
-	void setPacketHandler(PacketHandlerFunctionWithSender PacketReceivedFunctionWithSender);
 	
 private:
     int	 handler;
     bool connected;
     
-    /* COBS helpers for receiving an unknown packet */
-	uint8_t _receiveBuffer[MAX_PACKET_LENGTH] = {0};
-	size_t _receiveBufferIndex = 0;
-	/* On-packet-received function initialization */
-	PacketHandlerFunction _PacketReceivedFunction = 0;
-	PacketHandlerFunctionWithSender _PacketReceivedFunctionWithSender = 0;
 	
 };
 

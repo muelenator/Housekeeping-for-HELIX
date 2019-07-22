@@ -1,5 +1,5 @@
 /* 
- * PingAndRead.cpp
+ * userTest.cpp
  *
  * General template functions for a specific use case of the main.cpp program.
  * --Program prompts the user for an intended destination and command, then sends 
@@ -11,6 +11,7 @@
  * Defines
  ****************************************************************************/
 #include "userTest.h"
+#include "iProtocol.h"
 
 using std::cout;
 using std::cin;
@@ -18,14 +19,25 @@ using std::endl;
 
 /* User input variables for setupMyPacket() */
 housekeeping_id userIN;
-housekeeping_id userDST;
 housekeeping_cmd userIN2;
+char userIN3;
+
+housekeeping_id userDST;
 housekeeping_cmd userCMD;
-housekeeping_cmd userSETCMD;
-housekeeping_prio_type userPRIO;
+
+/* Buffers for converting user inputted numbers to unsigned ints */
+uint16_t number;
+std::string numbuf;
+
 
 /* Buffer for outgoing data in setupMyPacket(). This can be changed if  */
 uint8_t outgoingData [255] = {0};
+uint32_t TempRead;
+
+/* Buffer for the temperature reading conversion & output */
+float TempC;
+float TempF;
+uint8_t * tmp;
 
 /* Modified >> operator so that the user can input commands & destinations */
 std::istream& operator>>(std::istream& is, housekeeping_id& guy)
@@ -62,7 +74,7 @@ std::istream& operator>>(std::istream& is, housekeeping_prio_type& guy)
  * --Elaborates typedefs located in iProtocol.h
  *
  */
-void startUp()
+void startUp(housekeeping_hdr_t * hdr_out)
 {
 	cout << "#####################################################################";
 	cout << endl;
@@ -79,25 +91,22 @@ void startUp()
 	
 	cout << "MagnetHSK" << '\t' << "2";
 	cout << '\t' << '\t';	
-	cout << "Fake Sensor Read" << '\t' << '\t' << "2" << endl;
+	cout << "Internal Temp Sensor Read" << '\t' << "2" << endl;
 	
-	cout << "eBroadcast" << '\t' << "255";
+	cout << "eDCTHsk" << '\t' << '\t' << "3";	
 	cout << '\t' << '\t';
-	cout << "Bad destination error test" << '\t' << "3" << endl;
+	cout << "Map all devices" << '\t' << '\t' << '\t' << "3" << endl;
 	
-	cout << '\t' << '\t' << '\t' << '\t';
-	cout << "Bad arguments error test" << '\t' << "4" << endl;
-	
-	cout << '\t' << '\t' << '\t' << '\t';
-	cout << "Map all devices (dst=broadcast) 5" << endl;
-	
-	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "eDCTTemp1" << '\t' << "4";	
+	cout << '\t' << '\t';
 	cout << "eSendLowPriority" << '\t' << '\t' << "250" << endl;
 	
-	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "eDCTTemp2" << '\t' << "5";	
+	cout << '\t' << '\t';
 	cout << "eSendMedPriority" << '\t' << '\t' << "251" << endl;
 	
-	cout << '\t' << '\t' << '\t' << '\t';
+	cout << "eBroadcast" << '\t' << "255";	
+	cout << '\t' << '\t';
 	cout << "eSendHiPriority" << '\t' << '\t' << '\t' << "252" << endl;
 	
 	cout << '\t' << '\t' << '\t' << '\t';
@@ -105,7 +114,6 @@ void startUp()
 	
 	cout << '\t' << '\t' << '\t' << '\t';
 	cout << "Reset" << '\t' << '\t' << '\t' << '\t' << "254" << endl;
-	
 	
 	cout << endl << endl;
 
@@ -129,11 +137,17 @@ void startUp()
 	cout << "#####################################################################";
 	cout << endl << endl;
 	
+	hdr_out->dst = eBroadcast;
+	hdr_out->cmd = ePingPong;
+	hdr_out->len = 0;
+	
 }
 
 /* Function flow:
  * --Asks & accepts user input for intended destination & intended command to be 
  * 	 sent.
+ * --Asks what length to use, and whether or not to attach those bytes to the 
+ * 	 outgoing packet
  * --Builds outgoing data header
  *
  * Function params:
@@ -145,17 +159,16 @@ void startUp()
  * userIN2:		Buffer for user inputted command (see typedefs)
  * userDST:		User inputted destination that is put in the outgoing packet
  * userCMD:		User inputted command that is put in the outgoing packet
- *
- * If the user wants to change priority of a command, two more variables are 
- * required.
- * userSETCMD:	User inputted command whose priority they want changed
- * userPRIO:	User inputted priority for the above command
+ * numbuf:		User inputted string of character numbers to be converted
+ * number:		Unsigned int based on user input		
  *
  */
-void setupMyPacket(housekeeping_hdr_t * hdr_out, housekeeping_prio_t * hdr_prio)
+uint8_t setupMyPacket(housekeeping_hdr_t * hdr_out, housekeeping_prio_t * hdr_prio)
 {	
-	/* Get user input for message destination */
-	cout << "Destination #? " << endl;
+	/******************************************
+	 * Get user input for message destination 
+	 ******************************************/
+	cout << "Destination #? " << '\t';
 	cin >> userIN;
 	while (cin)
 	{
@@ -167,13 +180,15 @@ void setupMyPacket(housekeeping_hdr_t * hdr_out, housekeeping_prio_t * hdr_prio)
 		else 
 		{
 			cout << "Not a valid destination." << endl << endl;
-			cout << "Destination #? " << endl;
+			cout << "Destination #? " << '\t';
 			cin >> userIN;
 		}
 	}
 	
-	/* Get user input for message command */
-	cout << "What command #? " << endl;
+	/******************************************
+	 * Get user input for message command 
+	 ******************************************/
+	cout << "What command #? ";
 	cin >> userIN2;
 	while (cin)
 	{
@@ -186,62 +201,84 @@ void setupMyPacket(housekeeping_hdr_t * hdr_out, housekeeping_prio_t * hdr_prio)
 		else 
 		{
 			cout << "Not a valid command" << endl;
-			cout << "Command #? " << endl;
+			cout << "Command #? ";
 			cin >> userIN2;
 		}
 	}
 	
-	cout << endl;
-	
-	/* Fill in the header */
+	/* Fill in the header with these */
 	hdr_out->dst = userDST;			// Intended destination of packet
 	hdr_out->cmd = userCMD;			// Command for what do to with packet
-	hdr_out->len = 0;				// Size of data after the header
 	
-	/* If the set priority command was called... */
-	if ((int) userCMD == 1)
+	/******************************************
+	 * Get user input for the length of the message
+	 ******************************************/
+	cout << "What length? (A nonzero length may produce an error) " << '\t';
+	cin >> numbuf;
+	while (cin)
 	{
-		cout << "Set Priority chosen. What command # to set? " << endl;
-		cin >> userSETCMD;
-		while (cin)
+		number = strtoul(numbuf.c_str(), 0, 10);
+		if (number > 255)
 		{
-			if ((int) userSETCMD <= 249 && (int) userSETCMD >= 0)
-			{
-				break;
-			}
-			else 
-			{
-				cout << "Not a valid command to set." << endl << endl;
-				cout << "Command # to set? " << endl;
-				cin >> userSETCMD;
-			}
+			cout << "Not a valid length. Input a number between 0 & 255: ";
+			cin >> numbuf;
 		}
 		
-		/* Get user input for message command */
-		cout << "What priority # should this command have? " << endl;
-		cin >> userPRIO;
-		while (cin)
+		else 
 		{
-			if ((int) userPRIO <= 3 && (int) userPRIO >= 0)
-			{
-				break;
-			}
-			
-			else 
-			{
-				cout << "Not a valid priority." << endl;
-				cout << "Priority #? " << endl;
-				cin >> userPRIO;
-			}
+			hdr_out->len = (uint8_t) number;
+			break;
 		}
-		
-		outgoingData[0] = userSETCMD;
-		outgoingData[1] = userPRIO;
-		hdr_out->len = 2;
 	}
-	
-	/* Option to match data, if wanted to populate outgoingData ahead of time */
-	matchData(hdr_out);
+		
+	/******************************************
+	* Ask if it is a fake length for an error test 
+	******************************************/
+	cout << "Attach 'length' number of bytes to the end of the header? (y/n) ";
+		
+	cin >> userIN3;
+	while (cin)
+	{
+		if (userIN3 == 'y')
+		{
+			cout << "Press enter after inputting each byte as characters:";
+			cout << endl;
+			for (int i = 0; i < hdr_out->len; i++)
+			{
+				cin >> numbuf;
+				while (cin)
+				{
+					number = strtoul(numbuf.c_str(), 0, 10);
+						
+					if (number > 255)
+					{
+						cout << "Not a valid data byte. ";
+						cout << "Input a number between 0 & 255: ";
+						cin >> numbuf;
+					}
+					else 
+					{
+						outgoingData[i] = (uint8_t) number;
+						break;
+					}
+				}
+			}
+				
+			/* Match data, if there is any */
+			matchData(hdr_out);
+			return hdr_out->len;
+		}
+		else if (userIN3 == 'n')
+		{
+			return 0;
+		}
+		else
+		{
+			cout << "Attach a 'length' number of bytes to the header? (y/n) ";
+			cin >> userIN3;
+		}	
+	}
+		
 }
 
 /* Function flow:
@@ -253,7 +290,7 @@ void setupMyPacket(housekeeping_hdr_t * hdr_out, housekeeping_prio_t * hdr_prio)
  * 				--As a housekeeping_hdr_t type, contains a src, dst, cmd, & len
  *
  */
-void whatToDoIfPingPong(housekeeping_hdr_t * hdr_in)
+void justReadHeader(housekeeping_hdr_t * hdr_in)
 {
 	cout << "Reading in packet header... " << endl;
 	/* Read off header data */
@@ -261,7 +298,7 @@ void whatToDoIfPingPong(housekeeping_hdr_t * hdr_in)
 	cout << "Intended destination: " << (int) hdr_in->dst << endl;
 	cout << "Command : " << (int) hdr_in->cmd << endl;
 	cout << "Length of data attached: " << (int) hdr_in->len << endl << endl;
-	cout << endl << endl;
+	cout << endl;
 }
 
 /* Function flow:
@@ -290,10 +327,13 @@ void whatToDoIfSetPriority(housekeeping_hdr_t * hdr_in, housekeeping_prio_t * hd
  * 				--As a housekeeping_hdr_t type, contains a src, dst, cmd, & len
  *
  * Function variables:
- * ptr:			Dummy pointer to the current data location. Gets iterated over
+ * TempRead:	Buffer to put the incoming unsigned 32-bit temperature reading in
+ * tmp:			Dummy pointer to the current data location. Gets iterated over
+ * TempC:		Float for converted temperature in Celsius
+ * TempF:		Float for converted temperature in Fahreheit
  * 
  */
-void whatToDoIfFSR(housekeeping_hdr_t * hdr_in)
+void whatToDoIfISR(housekeeping_hdr_t * hdr_in)
 {
 	cout << "Reading in packet header... " << endl;
 	/* Read off header data */
@@ -301,13 +341,21 @@ void whatToDoIfFSR(housekeeping_hdr_t * hdr_in)
 	cout << "Intended destination: " << (int) hdr_in->dst << endl;
 	cout << "Command : " << (int) hdr_in->cmd << endl;
 	cout << "Length of data attached: " << (int) hdr_in->len << endl;
-	cout << "Fake data: " << endl;
+	cout << "Internal temperature of device #" << (int)hdr_in->src << ": ";
+
+	TempRead = 0;
+	tmp = (uint8_t *) &TempRead;
+
+	for(int i=0; i < hdr_in->len; i++)
+    {
+        *tmp = *((uint8_t *)hdr_in + 4 + i);
+		tmp = tmp + 1;
+    }
 	
-	for (int i = 0; i < hdr_in->len; i++)
-	{
-		cout << (int) *((uint8_t *) hdr_in+4+i) << ", ";
-	}
-	cout << endl << endl;
+	TempC = (float)(1475 - ((2475*TempRead)/4096))/10;
+	TempF = (float)((TempC * 9) + 160) / 5;
+	
+	cout << TempF << " Farenheit." << endl << endl;
 }
 
 /* Function flow:

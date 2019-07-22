@@ -5,7 +5,7 @@
  * defined in userTest.cpp. Only the USB port address is intended to be editted
  * in this file.
  *
- * --Serial port name on windows. If, in 'COM#', # is > 9, portName must include 
+ * --Serial port name on Windows. If, in 'COM#', # is > 9, portName must include 
  * 	 these backslashes: '\\\\.\\COM#' 
  */
  
@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <chrono>
+#include <cerrno>
 
 #include "iProtocol.h"
 #include "userTest.h"
@@ -38,7 +39,7 @@ using std::cin;
 using std::endl;
 
 /* Serial port name: see above */
-const char *port_name = "COM7";
+const char *port_name = "COM8";
 
 /* Name this device */
 housekeeping_id myComputer = eSFC;
@@ -62,13 +63,17 @@ housekeeping_hdr_t * hdr_out;
 housekeeping_err_t * hdr_err;
 housekeeping_prio_t * hdr_prio;
 
-/* Utility variable: Checksum value for read-in */
-uint8_t checkin;
+/* Utility variableas: */
+uint8_t checkin;				// Checksum value for read-in
+uint8_t lengthBeingSent;		// Actual 
+
+uint16_t numberIN;
+std::string numbufIN;
 
 /* While connected, variables to check the how long its been since read a byte */
 int read_result = 0;
 std::chrono::time_point<std::chrono::system_clock> newest_zero, newest_result;
-std::chrono::duration<double> elapsed_time; 
+std::chrono::duration<double> elapsed_time;
 
 /* Bool if a reset needs to happen */
 bool needs_reset = false;
@@ -78,23 +83,51 @@ bool needs_reset = false;
 *******************************************************************************/
 /* Function flow:
  * --Gets outgoing header from the userTest function 'setupMyPacket'
- * --Computes the checksum of the outgoing data + attaches it to the end of the 
- * 	 message.
+ * --Computes the checksum of the outgoing data 
+ * --Asks user what checksum to use
+ * 
+ * Function variables:
+ * numbufIN:		Character buffer for user input
+ * numberIN:		Unsigned integer that resulted from the conversion
  *
  */
 void setup()
 {
-	setupMyPacket(hdr_out, hdr_prio);	// Fills in rest of header
+	lengthBeingSent = setupMyPacket(hdr_out, hdr_prio);	// Fills in rest of header
 	
 	/* Compute checksum for outgoing packet + add it to the end of packet */
-	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
-											 &outgoingPacket[4 + hdr_out->len]);
+	outgoingPacket[4+lengthBeingSent] = computeMySum(outgoingPacket, 
+											 &outgoingPacket[4 + lengthBeingSent]);
+
+	cout << "The computed checksum is " << (int) outgoingPacket[4+lengthBeingSent];
+	cout << ". Enter this value, or input a different checksum to check protocol reliability.";
+	cout << endl;
+
+	cin >> numbufIN;
+	
+	while (cin)
+	{
+		numberIN = strtoul(numbufIN.c_str(), 0, 10);
+		
+		if (numberIN > 255)
+		{
+			cout << "Number too big. Input a number between 0 & 255: " ;
+			cin >> numbufIN;
+		}
+		else
+		{
+			outgoingPacket[4+lengthBeingSent] = (uint8_t) numberIN;
+			break;
+		}
+	}
+	cout << endl;
 }
 
 /* Function flow:
  * --Checks to see if the packet was received from an unknown device
  *		--If so, add that device address to the list of known devices
  * --Sorts through commands & executes defined functions in myprogram.h
+ * --If there is no protocol for a command, just reads header + displays data
  *
  * Function params:
  * buffer:		Pointer to the location of the incoming packet
@@ -118,15 +151,16 @@ void commandCenter(const uint8_t * buffer)
 	/* Check commands */
 	if (hdr_in->cmd == ePingPong)
 	{
-		whatToDoIfPingPong(hdr_in);
+		justReadHeader(hdr_in);
+		cout << endl;
 	}
 	else if (hdr_in->cmd == eSetPriority)
 	{
 		whatToDoIfSetPriority(hdr_in, hdr_prio);
 	}
-	else if (hdr_in->cmd == eFakeSensorRead)
+	else if (hdr_in->cmd == eIntSensorRead)
 	{
-		whatToDoIfFSR(hdr_in);
+		whatToDoIfISR(hdr_in);
 	}
 	else if (hdr_in->cmd == eMapDevices)
 	{
@@ -135,7 +169,7 @@ void commandCenter(const uint8_t * buffer)
 	else if ((int) hdr_in->cmd < eSendAll && (int) hdr_in->cmd >= eSendLowPriority
 			 && hdr_in->len == 0)
 	{
-		cout << "Device#" << (int) hdr_in->src;
+		cout << "Device #" << (int) hdr_in->src;
 		cout << " did not have any data of this priority." << endl << endl;
 	}
 	else if (hdr_in->cmd == eError)
@@ -149,6 +183,17 @@ void commandCenter(const uint8_t * buffer)
 											 &outgoingPacket[4 + hdr_out->len]);
 		
 		needs_reset = true;
+	}
+	else
+	{
+		justReadHeader(hdr_in);
+		cout << "DATA: ";
+		
+		for (int i=0; i < hdr_in->len; i++)
+		{
+			cout << (int) *((uint8_t *) hdr_in + 4 + i) << " ";
+		}
+		cout << endl;
 	}
 }
 
@@ -228,9 +273,11 @@ int main()
 	/* Set the function that will act when a packet is received */
 	TM4C.setPacketHandler(&checkHdr);
 	
-	/* Start up your program & set the outgoing packet data */
-	startUp();
-	setup();
+	/* Start up your program & set the outgoing packet data + send it out */
+	startUp(hdr_out);
+	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
+											 &outgoingPacket[4 + hdr_out->len]);
+	TM4C.send(outgoingPacket, 4 + hdr_out->len + 1);
 	
 	/* On startup: Reset number of found devices & errors to 0 */
 	memset(downStreamDevices, 0, numDevices);
@@ -238,18 +285,16 @@ int main()
 	memset(errorsReceived, 0, numErrors);
 	numErrors = 0;
 	
-	/* send the header and packet formed from 'setup' */
-	TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
-	
 	/* Initialize timing variables for when the last message was received */
-	newest_zero = std::chrono::system_clock::now() + (std::chrono::milliseconds) 10000;
+	newest_zero = std::chrono::system_clock::now();
 	newest_result = std::chrono::system_clock::now();
 	
 	/* While the serial port is open, */
   	while (TM4C.isConnected())
 	{  	
 		/* Reads in 1 byte at a time until the full packet arrives.
-     	 * If a full packet is received, update will execute PacketReceivedFunction */	
+     	 * If a full packet is received, update will execute PacketReceivedFunction 
+		 * If no full packet is received, bytes are discarded 	*/	
 		read_result = TM4C.update(incomingPacket);
 		
 		/* If a packet was decoded, mark down the time it happened */
@@ -262,21 +307,25 @@ int main()
 		 * something has been decoded */
 		elapsed_time = newest_zero - newest_result;
 		
-		/* If that ^ time is greater than 1/4 a second, prompt the user again */
-		if (elapsed_time.count() > .25)
+		/* If that ^ time is greater than 1/2 a second, prompt the user again */
+		if (elapsed_time.count() > .5)
 		{ 
-			/* check if a reset needs to be sent */
+			/* Check if a reset needs to be sent */
 			if (needs_reset)
 			{
 				TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
 				needs_reset = false;
+				return 0;
 			}
 			
+			/* If it doesn't, prompt the user again for packet params  */
 			setup();
 			
-			/* send the header and packet*/
-			TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
+			/* Send out the header and packet*/
+			TM4C.send(outgoingPacket, 4 + lengthBeingSent + 1); 
 			
+			/* Reset the timing system */
+			newest_zero = std::chrono::system_clock::now();
 			newest_result = std::chrono::system_clock::now();
 		}				
   	}

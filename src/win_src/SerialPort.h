@@ -5,8 +5,13 @@
  *
  */
 
-#ifndef SERIALPORT_H
-#define SERIALPORT_H
+#pragma once
+
+#include <windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <chrono>
 
 /* Max data length is: 
  *	--4 header bytes
@@ -21,11 +26,6 @@
 /* define WAIT_TIME for time to wait after connecting to board */
 #define WAIT_TIME 2000
 
-#include <windows.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-
 class SerialPort
 {	
 public:
@@ -36,6 +36,7 @@ public:
     int update(uint8_t *buffer);
     bool send(uint8_t *buffer, size_t buf_size);
     bool isConnected();
+	bool checkForBadPacket();
     
     /* typdefs for On-package-received function */
     typedef void (*PacketHandlerFunction)(const uint8_t * buffer,
@@ -58,10 +59,13 @@ private:
     /* COBS helper variables for receiving an unknown packet */
 	uint8_t _receiveBuffer[MAX_PACKET_LENGTH] = {0};
 	size_t _receiveBufferIndex = 0;
+
 	/* On-packet-received function initialization */
 	PacketHandlerFunction _PacketReceivedFunction = 0;
 	PacketHandlerFunctionWithSender _PacketReceivedFunctionWithSender = 0;
-	
-};
 
-#endif // SERIALPORT_H
+	/* Timing variables for discarding incomplete packets */
+	std::chrono::time_point<std::chrono::system_clock> time_LastByteReceived, time_Current;
+	std::chrono::duration<double> byteless_interval;
+    bool OK_toGetCurrTime = false;
+};

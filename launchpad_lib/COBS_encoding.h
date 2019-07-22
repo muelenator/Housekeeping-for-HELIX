@@ -11,7 +11,7 @@
 
 #include "Arduino.h"
 
-#define PACKETMARKER 0
+#define PACKETMARKER 0	// Globalize packet marker
 
 
 /// \brief A Consistent Overhead Byte Stuffing (COBS) Encoder.

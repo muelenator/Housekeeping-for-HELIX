@@ -1,5 +1,5 @@
 /*
- * MainHSK_prototype.ino
+ * DCTHSK_prototype.ino
  * 
  * Initiates serial ports & follows HSK protocol for command responses and error
  * reporting. This program can be used on other devices by changing the device
@@ -14,7 +14,7 @@
 
 #include <driverlib/sysctl.h>
 
-#define BAUD 1500000
+#define BAUD 1250000
 
 /* Declare instances of PacketSerial to set up the serial lines */
 PacketSerial upStream1;
@@ -30,12 +30,12 @@ PacketSerial downStream7;
 * Defines
 *******************************************************************************/
 /* Name of this device */
-housekeeping_id myID = eMainHsk;
+housekeeping_id myID = eDCTHsk;
 
 /* Outgoing buffer, for up or downstream. Only gets used once a complete packet
  * is received -- a command or forward is executed before anything else happens,
  * so there shouldn't be any over-writing here. */
-uint8_t outgoingPacket [MAX_PACKET_LENGTH]; 
+uint8_t outgoingPacket [MAX_PACKET_LENGTH]; 	// Outgoing Buffer
 
 /* Use pointers for all device's housekeeping headers */
 housekeeping_hdr_t * hdr_in; 		housekeeping_hdr_t * hdr_out;
@@ -61,15 +61,15 @@ int bus = 0;
 *******************************************************************************/
 void setup()
 {
-	Serial.begin(BAUD);
-	upStream1.setStream(&USBSerial);
+	Serial1.begin(BAUD);
+	upStream1.setStream(&Serial1);
 	upStream1.setPacketHandler(&checkHdr);
 	
+	Serial.begin(BAUD);
 	downStream1.setStream(&Serial);
 	downStream1.setPacketHandler(&checkHdr);
   
-	Serial1.begin(BAUD);
-	downStream2.setStream(&Serial1);
+	downStream2.setStream(&USBSerial);
 	downStream2.setPacketHandler(&checkHdr);
 	
 	Serial2.begin(BAUD);

@@ -41,10 +41,10 @@ typedef enum housekeeping_cmd
 {
 	ePingPong = 0,
 	eSetPriority = 1,
-	eFakeSensorRead = 2,
-	eFakeError1 = 3,
-	eFakeError2 = 4,
-	eMapDevices = 5,
+	//2-249 are board-specific: these are test commands
+	eIntSensorRead = 2,
+	eMapDevices = 3,
+	eHeaterControl = 4,
 	//2-249 are board-specific
 	eSendLowPriority = 250,
 	eSendMedPriority = 251,
@@ -55,7 +55,7 @@ typedef enum housekeeping_cmd
 } housekeeping_cmd;
 
 
-
+/* Priority definitions */
 typedef enum housekeeping_prio_type
 {
 	eNoPriority = 0,

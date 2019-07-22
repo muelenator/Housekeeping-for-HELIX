@@ -41,10 +41,9 @@ typedef enum housekeeping_cmd
 {
 	ePingPong = 0,
 	eSetPriority = 1,
-	eFakeSensorRead = 2,
-	eFakeError1 = 3,
-	eFakeError2 = 4,
-	eMapDevices = 5,
+	eIntSensorRead = 2,
+	eMapDevices = 3,
+	eHeaterControl = 4,
 	//2-249 are board-specific
 	eSendLowPriority = 250,
 	eSendMedPriority = 251,
