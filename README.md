@@ -3,7 +3,7 @@ Description
 -----------
 A set of C++ libraries for the HELIX Housekeeping system. The project is split into two parts: libraries for PC communication (SFC) and libraries for TI TM4C123GXL Launchpads. Communication between the two is through RS-232 serial.
 
-This project currently utilizes COBS encoding for sending data packets. The usefulness of COBS encoding is that it signals the end of a data packet with a unique marker byte. This 'packet marker' is able to be unique (w.r.t. the other bytes in the stream) because COBS-encoding removes any instances of the byte within the packet itself. COBS can be advantageous because it creates small and predictable overhead while providing reliablity at high transfer speeds. For more on COBS, see [COBS encoding](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing). 
+This project currently utilizes COBS encoding for sending data packets. The usefulness of COBS encoding is that it signals the end of a data packet with a unique marker byte. This 'packet marker' is able to be unique (w.r.t. the other bytes in the stream) because COBS-encoding removes any instances of the byte within the packet itself. COBS can be advantageous because it creates small and predictable overhead while providing reliablity at high transfer speeds. For more on COBS, see [COBS encoding](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing).
 
 This software also implements [PacketSerial](https://github.com/bakercp/PacketSerial), which wraps the HardwareSerial class for encoding/decoding COBS.
 
@@ -14,6 +14,16 @@ Setup
 -----
 Install the [Energia IDE](http://energia.nu/download/) on your PC.
 
+* If on Windows, install the Stellaris drivers for the TI Launchpads.
+	1. Download the Stellaris driver from [here](http://www.ti.com/tool/stellaris_icdi_drivers).
+	2. On windows, go to `Device Manager` -> `Other Devices`
+	3. Right click either device and hit Update Driver
+	4. Navigate to the folder where you downloaded the Stellaris driver and click select
+	5. Restart your computer. For more help, go to [here](https://www.14core.com/installing-launchpad-driver-with-energia-on-windows/).
+
+* If on Linux, follow the guide provided [here](https://energia.nu/guide/install/linux/)
+
+
 ### Energia Software
 
 #### Installing the Tiva-C library variant in the IDE
@@ -21,12 +31,6 @@ Install the [Energia IDE](http://energia.nu/download/) on your PC.
 2. In the text box, paste this link: https://raw.githubusercontent.com/muelenator/Arduino-Tiva-Board-Energia-1.6.10/master/release/package_arduino-tiva-board-1.0.7_index.json,https://raw.githubusercontent.com/jakeson21/Arduino-Tiva-Board-Energia-1.6.10/master/release/package_arduino-tiva-board-1.0.7_index.json
 3. Click `OK`, then navigate to `Tools`->`Board`->`Boards Manager`
 4. At the bottom of the list, there should appear a board manager called `Arduino-Tiva Boards`. Install it.
-* If on Windows, install the Stellaris drivers.
-	1. Download the Stellaris driver from [here](http://www.ti.com/tool/stellaris_icdi_drivers).
-	2. On windows, go to `Device Manager` -> `Other Devices`
-	3. Right click either device and hit Update Driver
-	4. Navigate to the folder where you downloaded the Stellaris driver and click select
-	5. Restart your computer. For more help, go to [here](https://www.14core.com/installing-launchpad-driver-with-energia-on-windows/).
 * (Optional) Installing the official TI Tiva-C board manager in the IDE
 	1. Go to `Tools`->`Board`->`Boards Manager`
     2. Search for "TM4C"
@@ -45,10 +49,10 @@ Install the [Energia IDE](http://energia.nu/download/) on your PC.
 #### Flashing the Launchpad boards
 To gain access to the Device micro-usb port, the Launchpad must first be flashed with a compiled-binary sketch. This enables the board to change its bootloader. A binary flashing program like [UniFlash](http://www.ti.com/tool/uniflash) or, on Windows, [LM Flash Programmer](http://www.ti.com/tool/LMFLASHPROGRAMMER) will work.
 
-Launchboard .ino files are located in `launchpad_src`. 
-1. Load one into Energia and attach a Launchpad to the PC through the Launchpad's Debugging micro-usb port (with the switch in debugging mode). 
-2. Under `Tools`->`Board: `, make sure that the `Arduino-Tiva 80 MHz` option is chosen. 
-3. Export the compiled binary by `Sketch`->`Export compiled binary`. You should find the new .bin file in your sketch folder. 
+Launchboard .ino files are located in `launchpad_src`.
+1. Load one into Energia and attach a Launchpad to the PC through the Launchpad's Debugging micro-usb port (with the switch in debugging mode).
+2. Under `Tools`->`Board: `, make sure that the `Arduino-Tiva 80 MHz` option is chosen.
+3. Export the compiled binary by `Sketch`->`Export compiled binary`. You should find the new .bin file in your sketch folder.
 * (If Uniflash) Select the board TM4C123GXL. Continue, and under `Flash image(s)` select the .bin file you just created and click `Load Image`. If all goes well, there should be a 'Program success' message in the terminal at the bottom.
 * (If LM Flash) Select the board TM4C123G. Under `Program` select the .bin file you just created and click `Program`.
 
@@ -56,7 +60,7 @@ Future software flashing can take place through the Energia IDE by using the Lau
 
 ### Connections
 
-If the Launchpad source files were compiled & flashed with the "Arduino-Tiva" board manager, one Launchpad must be connected to a PC via USB through the Launchpad's `Device` micro-usb port. If the source files were compiled with the "TM4C123" board manager, the Launchpad's debugging port must be used. Using the TM4C123GXL Launchpad's pinout (found [here]()), connect `URX*` to `UTX*` (replace * with a port number) and vice versa. 
+If the Launchpad source files were compiled & flashed with the "Arduino-Tiva" board manager, one Launchpad must be connected to a PC via USB through the Launchpad's `Device` micro-usb port. If the source files were compiled with the "TM4C123" board manager, the Launchpad's debugging port must be used. Using the TM4C123GXL Launchpad's pinout (found [here]()), connect `URX*` to `UTX*` (replace * with a port number) and vice versa.
 
 ### Compiling with g++
 
@@ -90,14 +94,14 @@ At the end of any data array (whether the packet includes actual data, an additi
 
 Protocol Testing
 ----------------
-Each of the Launchpad's serial ports are initialized from the get-go. However, they will not know what devices are on each downstream serial port. For a Launchpad to obtain information about a device attached to a downstream port, it must first receive a message from that serial line. If a Launchpad does not know that a certain address is attached downstream, it will not pass on a message intended for that device. Each Launchpad is programmed to check the source address of upStream packets to verify if they are known. This way, the board creates a list of devices on each serial port. The program startup is intended to make sure each Launchpad is aware of every device attached downstream. This is accomplished through the `ePingPong` command. On program start, the PC sends out an `ePingPong` command to `eBroadcast`, so that every available device should respond back to the PC with the same command. 
+Each of the Launchpad's serial ports are initialized from the get-go. However, they will not know what devices are on each downstream serial port. For a Launchpad to obtain information about a device attached to a downstream port, it must first receive a message from that serial line. If a Launchpad does not know that a certain address is attached downstream, it will not pass on a message intended for that device. Each Launchpad is programmed to check the source address of upStream packets to verify if they are known. This way, the board creates a list of devices on each serial port. The program startup is intended to make sure each Launchpad is aware of every device attached downstream. This is accomplished through the `ePingPong` command. On program start, the PC sends out an `ePingPong` command to `eBroadcast`, so that every available device should respond back to the PC with the same command.
 
 
 ### Sending a packet
 The software acts as if the PC is the Science Flight Computer (SFC). On startup, the program prints a header with device #'s for addressing, command #'s, error types, and send priority #'s. It then prompts the user for:
 1. A destination to send a data packet to.
 2. A command to send. If a command is not yet programmed (i.e. not in the program header) the devices should respond with an error (bad command) and the PC should reset all devices and end the program.
-3. A 'length' number of data bytes to attach in this packet. 
+3. A 'length' number of data bytes to attach in this packet.
 4. Two arguments for testing the system's protocol:
     1. Testing for a `Bad length`. The option is presented to send 'length' data bytes or none at all. Choosing a non-zero length and attaching zero bytes (typing `n`) in the packet should produce an error.
     2. Testing for a `Bad argument`. The checksum is computed & displayed. The user is given the option to enter the correct checksum or test the system by attaching an incorrect checksum. The latter should produce an error.
@@ -126,7 +130,7 @@ This device map can be produced by using the eBroadcast destination as follows:
     * `y/n` should not matter, since there are no bytes to include
     * `1`, the correct checksum
 2. You should receive a message from all devices. As a way to check this, the PC will display the header of all messages it received before timeout (.25 seconds seemed reasonable).
-3. By this time, all devices should have acknowledged the presence of any downstream devices. For a list of attached devices of each Launchpad, 
+3. By this time, all devices should have acknowledged the presence of any downstream devices. For a list of attached devices of each Launchpad,
     * `3` (eBroadcast) as the destination
     * `5` (eMapDevices), a custom function for testing purposes, as the command.
     * `0` length, use the correct checksum
@@ -164,15 +168,15 @@ Once an error message is received from a Launchpad, the software on the PC is pr
 To acquire groups of data readings from a device as opposed to single readings, we can set the 'priority' of a specific command/data reading to be low, medium, high, or none. This enables the user to ask a device to send all data of a given priority if needed. To set the priority of a command on a device, or on all devices,
 * Choose your destination address(es)
 * `1` as the command
-* `2` as the length 
+* `2` as the length
 * `y` to send these bytes and press enter. The program will ask for these two bytes. They correspond to
-    1. The first argument you will be prompted for is the command whose priority you wish to set. 
+    1. The first argument you will be prompted for is the command whose priority you wish to set.
     2. The second is the priority level you want to attach to that command.
 * Enter the correct checksum.
 
 If all goes well, you should receive a confirmation message that the device has changed its priority. Though, to be absolutely sure that a command's priority has been changed, you could ask the device to execute all commands of that priority.
 * Choose the same destination(s) as above.
-* For the command, compare the program header 'eSend' commands to the priority type you want. Input that number. 
+* For the command, compare the program header 'eSend' commands to the priority type you want. Input that number.
 * 0 length, use the correct checksum
 
 The device(s) should execute the command whose priority you previously set, and any others that are at the same priority level.
@@ -182,7 +186,7 @@ The Housekeeping system protocol is destination sensitive in the 'eSend' command
 1. Pick a specific device you want to reach. Find a priority group that you have not assigned any commands to. Looking to the program header, use the 'eSend' command whose priority group matches the constraints in the last statement.
     * You should receive a confirmation message that the device did not have any commands set to this priority.
 2. Now repeat the same steps, but this time choose the eBroadcast destination.
-    * This time, the device we have been using in this example will not issue a confirmation. You might note that other devices will also respond if they happen to have a command set. 
+    * This time, the device we have been using in this example will not issue a confirmation. You might note that other devices will also respond if they happen to have a command set.
 
 ### Adding a command
 * Command enumerations are located in the `iProtocol.h` file of both the `launchpad_lib` and `src` folder. For both the PC and device to recognize the command, it must be added to both files.  
@@ -192,7 +196,7 @@ The Housekeeping system protocol is destination sensitive in the 'eSend' command
     * On the device side are located in the `commandResponse` source files in the `launchpad_lib` folder.
 
 ### Release notes
-This build has been tested with a baud rate up to 1.5e7 bps. 
+This build has been tested with a baud rate up to 1.5e7 bps.
 * The Linux side is pretty buggy. Setting a baud rate in Linux requires a prefix 'B' in front of the number, but only certain baud rates are enumerated and work this way. Because of some startup protocols I haven't been able to get rid of yet, you may have to exit the program once or twice before it works.
 
 

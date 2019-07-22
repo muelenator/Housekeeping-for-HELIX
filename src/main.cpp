@@ -1,14 +1,14 @@
-/* 
+/*
  * main.cpp
  *
- * Basic run of input/output for LaunchPad communication. All applicability is 
+ * Basic run of input/output for LaunchPad communication. All applicability is
  * defined in userTest.cpp. Only the USB port address is intended to be editted
  * in this file.
  *
- * --Serial port name on Windows. If, in 'COM#', # is > 9, portName must include 
- * 	 these backslashes: '\\\\.\\COM#' 
+ * --Serial port name on Windows. If, in 'COM#', # is > 9, portName must include
+ * 	 these backslashes: '\\\\.\\COM#'
  */
- 
+
 /*******************************************************************************
 * Defines
 *******************************************************************************/
@@ -22,7 +22,7 @@
 #include "linux_src/SerialPort_linux.cpp"
 #include "linux_src/LinuxLib.h"
 #include "linux_src/LinuxLib.cpp"
-#endif 
+#endif
 
 #include <iostream>
 #include <stdio.h>
@@ -39,7 +39,7 @@ using std::cin;
 using std::endl;
 
 /* Serial port name: see above */
-const char *port_name = "COM8";
+const char *port_name = "/dev/ttyACM0";
 
 /* Name this device */
 housekeeping_id myComputer = eSFC;
@@ -56,7 +56,7 @@ uint8_t numErrors = 0;
 uint8_t outgoingPacket [MAX_PACKET_LENGTH] = {0};	// Buffer for outgoing packet
 uint8_t incomingPacket [MAX_PACKET_LENGTH] = {0};	// Buffer for incoming packet
 
-/* Defining the variable here makes the linker connect where these variables 
+/* Defining the variable here makes the linker connect where these variables
  * are being used (see iProtocol.h for declaration)	*/
 housekeeping_hdr_t * hdr_in;
 housekeeping_hdr_t * hdr_out;
@@ -65,7 +65,7 @@ housekeeping_prio_t * hdr_prio;
 
 /* Utility variableas: */
 uint8_t checkin;				// Checksum value for read-in
-uint8_t lengthBeingSent;		// Actual 
+uint8_t lengthBeingSent;		// Actual
 
 uint16_t numberIN;
 std::string numbufIN;
@@ -83,9 +83,9 @@ bool needs_reset = false;
 *******************************************************************************/
 /* Function flow:
  * --Gets outgoing header from the userTest function 'setupMyPacket'
- * --Computes the checksum of the outgoing data 
+ * --Computes the checksum of the outgoing data
  * --Asks user what checksum to use
- * 
+ *
  * Function variables:
  * numbufIN:		Character buffer for user input
  * numberIN:		Unsigned integer that resulted from the conversion
@@ -94,9 +94,9 @@ bool needs_reset = false;
 void setup()
 {
 	lengthBeingSent = setupMyPacket(hdr_out, hdr_prio);	// Fills in rest of header
-	
+
 	/* Compute checksum for outgoing packet + add it to the end of packet */
-	outgoingPacket[4+lengthBeingSent] = computeMySum(outgoingPacket, 
+	outgoingPacket[4+lengthBeingSent] = computeMySum(outgoingPacket,
 											 &outgoingPacket[4 + lengthBeingSent]);
 
 	cout << "The computed checksum is " << (int) outgoingPacket[4+lengthBeingSent];
@@ -104,11 +104,11 @@ void setup()
 	cout << endl;
 
 	cin >> numbufIN;
-	
+
 	while (cin)
 	{
 		numberIN = strtoul(numbufIN.c_str(), 0, 10);
-		
+
 		if (numberIN > 255)
 		{
 			cout << "Number too big. Input a number between 0 & 255: " ;
@@ -135,19 +135,19 @@ void setup()
  * Function variables:
  * downStreamDevices:		The array of addresses of known devices
  * numDevices:				Running total of downstream devices
- * 
+ *
  */
 void commandCenter(const uint8_t * buffer)
 {
 	/* Check if the device is already known */
-	if (findMe(downStreamDevices, downStreamDevices+numDevices, hdr_in->src) 
+	if (findMe(downStreamDevices, downStreamDevices+numDevices, hdr_in->src)
 			== downStreamDevices+numDevices)
 	{
 		/* If not, add it to the list of known devices */
 		downStreamDevices[numDevices] = hdr_in->src;
 		numDevices += 1;
 	}
-		
+
 	/* Check commands */
 	if (hdr_in->cmd == ePingPong)
 	{
@@ -173,22 +173,22 @@ void commandCenter(const uint8_t * buffer)
 		cout << " did not have any data of this priority." << endl << endl;
 	}
 	else if (hdr_in->cmd == eError)
-	{		
+	{
 		whatToDoIfError(hdr_err, errorsReceived, numErrors);
-		
-		resetAll(hdr_out);	
-		
+
+		resetAll(hdr_out);
+
 		/* Compute checksum for outgoing packet + add it to the end of packet */
-		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
+		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket,
 											 &outgoingPacket[4 + hdr_out->len]);
-		
+
 		needs_reset = true;
 	}
 	else
 	{
 		justReadHeader(hdr_in);
 		cout << "DATA: ";
-		
+
 		for (int i=0; i < hdr_in->len; i++)
 		{
 			cout << (int) *((uint8_t *) hdr_in + 4 + i) << " ";
@@ -200,7 +200,7 @@ void commandCenter(const uint8_t * buffer)
 /* Function flow:
  * --Called when a packet is received by the serial port instance
  * --Checks to see if the packet is meant for this device
- *		--If so, check the checksum for data corruption + 
+ *		--If so, check the checksum for data corruption +
  *		  execute the command in the header
  *
  * Function params:
@@ -209,7 +209,7 @@ void commandCenter(const uint8_t * buffer)
  *
  * Function variables:
  * checkin:		Utility variable to store a checksum in
- * 
+ *
  */
 void checkHdr(const uint8_t * buffer, size_t len)
 {
@@ -219,27 +219,27 @@ void checkHdr(const uint8_t * buffer, size_t len)
 	{
 		/* Check for data corruption */
 		checkin = computeMySum(buffer, &buffer[4 + hdr_in->len]);
-		
+
 		cout << "The computed checkSum is: " << (int) checkin << endl << endl;
-		
+
 		if (checkMySum(checkin, buffer[4 + hdr_in->len]))
 		{
 			commandCenter(buffer);
 		}
 		else cout << "Bummer, checksum did not match." << endl;
 	}
-	
+
 	/* If it wasn't, cast it as an error & restart */
 	else
 	{
 		cout << "Bad destination received... Restarting downstream devices." << endl;
-		
-		resetAll(hdr_out);	
-		
+
+		resetAll(hdr_out);
+
 		/* Compute checksum for outgoing packet + add it to the end of packet */
-		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
+		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket,
 											 &outgoingPacket[4 + hdr_out->len]);
-		
+
 		needs_reset = true;
 	}
 }
@@ -255,78 +255,78 @@ int main()
 	hdr_out = (housekeeping_hdr_t *) outgoingPacket;
 	hdr_err = (housekeeping_err_t *) (incomingPacket+4);
 	hdr_prio = (housekeeping_prio_t *) (incomingPacket+4);
-	
+
 	/* Create the header for the first message */
 	hdr_out->src = myComputer;			// Source of data packet
-	
-    /* Declare an instance of the serial port connection */
+
+  /* Declare an instance of the serial port connection */
  	SerialPort TM4C(port_name);
- 	
-  	/* Check if connection is established */
-  	if (TM4C.isConnected()) cout << "Connection Established" << endl;
-  	else 
+
+  /* Check if connection is established */
+  if (TM4C.isConnected()) cout << "Connection Established" << endl;
+  else
 	{
-		cout << "ERROR, check port name";
+	  cout << "ERROR, check port name";
 		return 0;
 	}
-  	
+
 	/* Set the function that will act when a packet is received */
 	TM4C.setPacketHandler(&checkHdr);
-	
+
 	/* Start up your program & set the outgoing packet data + send it out */
 	startUp(hdr_out);
-	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket, 
+	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket,
 											 &outgoingPacket[4 + hdr_out->len]);
 	TM4C.send(outgoingPacket, 4 + hdr_out->len + 1);
-	
+
 	/* On startup: Reset number of found devices & errors to 0 */
 	memset(downStreamDevices, 0, numDevices);
 	numDevices = 0;
 	memset(errorsReceived, 0, numErrors);
 	numErrors = 0;
-	
+
 	/* Initialize timing variables for when the last message was received */
 	newest_zero = std::chrono::system_clock::now();
 	newest_result = std::chrono::system_clock::now();
-	
+
 	/* While the serial port is open, */
-  	while (TM4C.isConnected())
-	{  	
+  while (TM4C.isConnected())
+	{
 		/* Reads in 1 byte at a time until the full packet arrives.
-     	 * If a full packet is received, update will execute PacketReceivedFunction 
-		 * If no full packet is received, bytes are discarded 	*/	
+     	 * If a full packet is received, update will execute PacketReceivedFunction
+		 * If no full packet is received, bytes are discarded 	*/
 		read_result = TM4C.update(incomingPacket);
-		
+
 		/* If a packet was decoded, mark down the time it happened */
 		if (read_result > 0) newest_result = std::chrono::system_clock::now();
-		
+
 		/* If a packet wasn't decoded in this run, write down the current time */
 		else newest_zero = std::chrono::system_clock::now();
-		
+
 		/* Using the above variable definitions, calculate how long its been since
 		 * something has been decoded */
 		elapsed_time = newest_zero - newest_result;
-		
+
 		/* If that ^ time is greater than 1/2 a second, prompt the user again */
 		if (elapsed_time.count() > .5)
-		{ 
+		{
 			/* Check if a reset needs to be sent */
 			if (needs_reset)
 			{
-				TM4C.send(outgoingPacket, 4 + hdr_out->len + 1); 
+				TM4C.send(outgoingPacket, 4 + hdr_out->len + 1);
 				needs_reset = false;
 				return 0;
 			}
-			
+
 			/* If it doesn't, prompt the user again for packet params  */
 			setup();
-			
+
 			/* Send out the header and packet*/
-			TM4C.send(outgoingPacket, 4 + lengthBeingSent + 1); 
-			
+			TM4C.send(outgoingPacket, 4 + lengthBeingSent + 1);
+
 			/* Reset the timing system */
 			newest_zero = std::chrono::system_clock::now();
 			newest_result = std::chrono::system_clock::now();
-		}				
-  	}
+		}
+  }
 }

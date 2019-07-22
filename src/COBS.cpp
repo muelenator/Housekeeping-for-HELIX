@@ -1,16 +1,16 @@
-/* 
+/*
  * COBS.cpp
  *
  * Defines the COBS class
  *
  * /Bakercp excerpt
  * Consistent Overhead Byte Stuffing (COBS) is an encoding that removes all of
- * a defined PACKETMARKER from arbitrary binary data. The encoded data consists 
- * only of bytes with values from 0x01 to 0xFF. This is useful for preparing 
+ * a defined PACKETMARKER from arbitrary binary data. The encoded data consists
+ * only of bytes with values from 0x01 to 0xFF. This is useful for preparing
  * data for transmission over a serial link (RS-232 or RS-485 for example), as
  * the PACKETMARKER byte can be used to unambiguously indicate packet boundaries.
- * COBS also has the advantage of adding very little overhead (at least 1 byte, 
- * plus up to an additional byte per 254 bytes of data). For messages smaller 
+ * COBS also has the advantage of adding very little overhead (at least 1 byte,
+ * plus up to an additional byte per 254 bytes of data). For messages smaller
  * than 254 bytes, the overhead is constant.
  *
  * Typical use case makes the PACKETMARKER by the 0 byte
@@ -32,16 +32,16 @@ COBS::COBS()
 /*****************************************************************************
  * Functions
  ****************************************************************************/
- 
+
 /* Function Flow
- * --Encode a byte buffer with the COBS encoder. 
+ * --Encode a byte buffer with the COBS encoder.
  * --Return the number of bytes written to the \p encodedBuffer.
- * 
+ *
  * Function Params:
  * buffer:			A pointer to the unencoded buffer to encode.
  * size:			The number of bytes in the \p buffer.
  * encodedBuffer:	The buffer for the encoded bytes.
- * 
+ *
  * \warning The encodedBuffer must have at least getEncodedBufferSize() allocated.
  *
  */
@@ -61,7 +61,7 @@ size_t COBS::encode(const uint8_t* buffer,
 			packetMarker to be the # of bytes away the next PACKETMARKER is */
         if (buffer[read_index] == PACKETMARKER)
         {
-            encodedBuffer[code_index] = code;
+            encodedBuffer[code_index] = code; // (code - PACKETMARKER) & 0xFF;
             code = 1;
             code_index = write_index++;
             read_index++;
@@ -81,7 +81,7 @@ size_t COBS::encode(const uint8_t* buffer,
             }
         }
     }
-    
+
 	/* Set the previous PACKETMARKER location to the # of bytes away the next one is */
     encodedBuffer[code_index] = code;
     /* NOTE!!!!
@@ -89,19 +89,19 @@ size_t COBS::encode(const uint8_t* buffer,
     	  an ending packetMarker
     	*/
     encodedBuffer[write_index] = PACKETMARKER;
-    
+
     return write_index;
 }
 
 /* Function Flow
- * --Decode a COBS-encoded buffer. 
+ * --Decode a COBS-encoded buffer.
  * --Return the number of bytes written to the \p decodedBuffer.
- * 
+ *
  * Function Params:
  * encodedbuffer:	A pointer to the \p encodedBuffer to decode.
  * size:			The number of bytes in the \p encodedBuffer.
  * decodedBuffer:	The target buffer for the decoded bytes.
- * 
+ *
  * \warning ecodedBuffer must have a minimum capacity of size.
  *
  */
@@ -117,14 +117,14 @@ size_t COBS::decode(const uint8_t* encodedBuffer,
     size_t write_index = 0;
     uint8_t code       = 0;
     uint8_t i          = 0;
-    
+
 	/* while the current byte being read is inside the message string*/
     while (read_index < size)
-    {  
-		/* the first code byte is the # of bytes we'll have to read until the 
-			next packetMarker is hit */ 	
-        code = encodedBuffer[read_index];
-        
+    {
+		/* the first code byte is the # of bytes we'll have to read until the
+			next packetMarker is hit */
+        code = encodedBuffer[read_index]; // (encodedBuffer[read_index] + PACKETMARKER) & 0xFF;
+
 		/* NOTE!!!!
 			--size + 1 vs. size
 			This is some hiccup with the C++ here. The compiler evaluates
@@ -137,14 +137,14 @@ size_t COBS::decode(const uint8_t* encodedBuffer,
         }
 
         read_index++;
-        
+
         /* write the non-encoded bits to the buffer until the next packetMarker */
         for (i = 1; i < code; i++)
         {
             decodedBuffer[write_index++] = encodedBuffer[read_index++];
         }
-		/* as long as the next zero is not 255 bytes away and we are not currently 
-			reading the last bit of the message, write a zero where the previous 'code' 
+		/* as long as the next zero is not 255 bytes away and we are not currently
+			reading the last bit of the message, write a zero where the previous 'code'
 			marker was in the encoded message. */
         if (code != 0xFF && read_index != size)
         {
@@ -157,7 +157,7 @@ size_t COBS::decode(const uint8_t* encodedBuffer,
 /* Function Flow
  * --Get the maximum encoded buffer size needed for a given unencoded buffer size.
  * --Returns the maximum size of the required encoded buffer.
- * 
+ *
  * Function Params:
  * encodedbuffer:	unencodedBufferSize The size of the buffer to be encoded.
  *
@@ -166,5 +166,3 @@ size_t COBS::getEncodedBufferSize(size_t unencodedBufferSize)
 {
     return unencodedBufferSize + unencodedBufferSize / 254 + 1;
 }
-
-

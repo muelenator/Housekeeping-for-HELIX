@@ -11,7 +11,7 @@
 
 #include "Arduino.h"
 
-#define PACKETMARKER 0	// Globalize packet marker
+#define PACKETMARKER 218	// Globalize packet marker
 
 
 /// \brief A Consistent Overhead Byte Stuffing (COBS) Encoder.
@@ -51,7 +51,7 @@ public:
         {
             if (buffer[read_index] == PACKETMARKER)
             {
-                encodedBuffer[code_index] = code;
+                encodedBuffer[code_index] = (code - PACKETMARKER) & 0xFF;
                 code = 1;
                 code_index = write_index++;
                 read_index++;
@@ -96,7 +96,7 @@ public:
 
         while (read_index < size)
         {
-            code = encodedBuffer[read_index];
+            code = (encodedBuffer[read_index] + PACKETMARKER) & 0xFF;
 
             if (read_index + code > size && code != 1)
             {

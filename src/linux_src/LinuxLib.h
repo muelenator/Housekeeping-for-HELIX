@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
+/* Set up the serial port for raw data communication */
 int set_interface_attribs (int portName, int speed, int parity);
 
+/* Change the minimum bytes & timeout for the connection on the fly */
 void set_mincount (int portName, int should_block);

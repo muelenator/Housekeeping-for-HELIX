@@ -8,8 +8,6 @@
  *
  */
 
-
-
 #include "LinuxLib.h"
 
 using std::cout;
@@ -43,26 +41,38 @@ int set_interface_attribs (int portName, int speed, int parity)
         return -1;
     }
 
+    /* Set I/O options location & baud rate speed */
     cfsetospeed(&options, (speed_t)speed);
     cfsetispeed(&options, (speed_t)speed);
-
-    options.c_cflag |= (CLOCAL | CREAD);    // ignore modem controls
-    options.c_cflag &= ~CSIZE;				// set the bit-mask
-    options.c_cflag |= CS8;         		// 8-bit characters
-    options.c_cflag &= ~PARENB;    			// no parity bit
-    options.c_cflag &= ~CSTOPB;     		// only need 1 stop bit
-    options.c_cflag &= ~CRTSCTS;    		// no hardware flowcontrol
-
-    /* setup for non-canonical mode--turn off most flags */
-    options.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON | IXOFF | IXANY);
-    options.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-    options.c_oflag &= ~OPOST;
-
-    /* fetch bytes as they become available */
-    options.c_cc[VMIN] = 0;		// VMIN = min # bytes to be available before read
-    options.c_cc[VTIME] = 0;	// VTIME = timeout in tenths of seconds
     
-    /* flush the input buffer, prep for new communication */
+    /* 8 bits, no parity, no stop bits */
+ 	options.c_cflag &= ~PARENB;
+ 	options.c_cflag &= ~CSTOPB;
+ 	options.c_cflag &= ~CSIZE;
+ 	options.c_cflag |= CS8;
+ 	
+ 	cfmakeraw(&options);
+//  	/* no hardware flow control */
+ 	options.c_cflag &= ~CRTSCTS;
+//  	/* enable receiver, ignore status lines */
+ 	options.c_cflag |= CREAD | CLOCAL;
+ 	
+ 	/* disable input/output flow control, disable restart chars */
+ 	options.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON | IXOFF | IXANY);
+ 	
+//  	/* disable canonical input, disable echo,
+//  	disable visually erase chars,
+//  	disable terminal-generated signals */
+ 	options.c_lflag &= ~(ICANON | ECHO | ECHONL | ECHOE | ISIG | IEXTEN);
+ 	
+//  	/* disable output processing */
+ 	options.c_oflag &= ~OPOST;
+
+    /* fetch bytes as they become available w/.1 second timeout */
+    options.c_cc[VMIN] = 0;		// VMIN = min # bytes to be available before read
+    options.c_cc[VTIME] = 1;	// VTIME = timeout in tenths of seconds
+    
+    /* flush the input buffer, prep for new communication. I don't think this works */
     tcflush(portName, TCIFLUSH);
 
 	/* set all these new options. If they don't set, spit out an error */
@@ -95,7 +105,7 @@ void set_mincount(int portName, int mcount)
     }
 
     options.c_cc[VMIN] = mcount ? 1 : 0;
-    options.c_cc[VTIME] = 5;        /* half second timer */
+    options.c_cc[VTIME] = 1;
 
     if (tcsetattr(portName, TCSANOW, &options) < 0)
         printf("Error tcsetattr: %s\n", strerror(errno));

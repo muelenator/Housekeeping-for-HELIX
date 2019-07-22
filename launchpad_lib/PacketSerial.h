@@ -222,17 +222,16 @@ public:
 
     bool checkForBadPacket()
     {
-        if (this->OK_toGetCurrTime) 
+        if (OK_toGetCurrTime) 
         {
-            this->time_Current = micros();
-            this->byteless_interval = this->time_Current - this->time_LastByteReceived;
-            this->OK_toGetCurrTime = false;
+            time_Current = micros();
+            byteless_interval = time_Current - time_LastByteReceived;
 
             /* If an incomplete packet was received, print an error and show the buffer data */
-            if (this->byteless_interval > 200000)
+            if (byteless_interval > 10000)
             {
-                this->OK_toGetCurrTime = false;
-                this->_receiveBufferIndex = 0;
+                OK_toGetCurrTime = false;
+                _receiveBufferIndex = 0;
                 return true;
             }
         }

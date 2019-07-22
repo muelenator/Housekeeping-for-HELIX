@@ -53,7 +53,7 @@ SerialPort::SerialPort(const char *portName)
             printf("failed to get current serial parameters");
         }
         else {
-            dcbSerialParameters.BaudRate = BAUD;	//setting baudrate = 9600
+            dcbSerialParameters.BaudRate = BAUD;	//setting baudrate
             dcbSerialParameters.ByteSize = 8;			//setting bytesize = 8
             dcbSerialParameters.StopBits = ONESTOPBIT;	//setting stopbits = 1
             dcbSerialParameters.Parity = NOPARITY;		//setting parity = None
@@ -209,7 +209,6 @@ bool SerialPort::checkForBadPacket()
     {
         this->time_Current = std::chrono::system_clock::now();
         this->byteless_interval = this->time_Current - this->time_LastByteReceived;
-        this->OK_toGetCurrTime = false;
 
         /* If an incomplete packet was received, print an error and show the buffer data */
         if (this->byteless_interval.count() >= .25)

@@ -14,7 +14,7 @@
 
 #include <driverlib/sysctl.h>
 
-#define BAUD 1500000
+#define BAUD 1125000
 
 /* Declare instances of PacketSerial to set up the serial lines */
 PacketSerial upStream1;
@@ -62,11 +62,11 @@ int bus = 0;
 void setup()
 {
 	Serial.begin(BAUD);
-	upStream1.setStream(&USBSerial);
+	upStream1.setStream(&Serial);
 	upStream1.setPacketHandler(&checkHdr);
 	
-	downStream1.setStream(&Serial);
-	downStream1.setPacketHandler(&checkHdr);
+//	downStream1.setStream(&Serial);
+//	downStream1.setPacketHandler(&checkHdr);
   
 	Serial1.begin(BAUD);
 	downStream2.setStream(&Serial1);

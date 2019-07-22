@@ -7,7 +7,7 @@
  * 0-255 payload bytes
  * 1 byte CRCS (or checksum)
  */
- 
+
 /*****************************************************************************
  * Defines
  ****************************************************************************/
@@ -24,18 +24,18 @@
 * Typedef enums
 *******************************************************************************/
 /* Src/dst definitions. 255 is illegal for source. */
-typedef enum housekeeping_id 
+typedef enum housekeeping_id
 {
-	eSFC = 0,			// Science flight computer
-	eMainHsk = 1,		// Main housekeeping board
-	eMagnetHsk = 2,		// Magnet housekeeping board
-	eDCTHsk = 3,		// DCT housekeeping board
-	eDCTTemp1 = 4,		// DCT temperature sensor housekeeping board #1
-	eDCTTemp2 = 5,		// DCT temperature sensor housekeeping board #2
+	eSFC = 252,			   // Science flight computer
+	eMainHsk = 1,		   // Main housekeeping board
+	eMagnetHsk = 2,		 // Magnet housekeeping board
+	eDCTHsk = 3,		   // DCT housekeeping board
+	eDCTTemp1 = 4,	   // DCT temperature sensor housekeeping board #1
+	eDCTTemp2 = 5,		 // DCT temperature sensor housekeeping board #2
 	// etc...
-	eBroadcast = 255	// Illegal as a source, but dst=255 means everyone responds
+	eBroadcast = 255	 // Illegal as a source, but dst=255 means everyone responds
 } housekeeping_id;
- 
+
 /* Command definitions */
 typedef enum housekeeping_cmd
 {
@@ -69,12 +69,12 @@ typedef enum housekeeping_prio_type
 /*******************************************************************************
 * Typedef structs
 *******************************************************************************/
-typedef struct housekeeping_hdr_t 
+typedef struct housekeeping_hdr_t
 {
-	uint8_t src;	// Source of packet
 	uint8_t dst; 	// Destination of packet
+	uint8_t src;	// Source of packet
 	uint8_t cmd; 	// Command (or response) type
-	uint8_t len; 	// Bytes to follow - 1	
+	uint8_t len; 	// Bytes to follow - 1
 } housekeeping_hdr_t;
 
 
@@ -112,5 +112,5 @@ uint8_t * findMe(uint8_t * first, uint8_t * last, uint8_t address);
 *******************************************************************************/
 extern housekeeping_hdr_t * hdr_in;		// pointer for loc of incoming data header
 extern housekeeping_hdr_t * hdr_out;	// pointer for loc of outgoing header
-extern housekeeping_err_t * hdr_err;	// pointer for loc of error header 
+extern housekeeping_err_t * hdr_err;	// pointer for loc of error header
 extern housekeeping_prio_t * hdr_prio;	// pointer for loc of priority header
