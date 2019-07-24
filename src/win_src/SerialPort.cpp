@@ -1,4 +1,4 @@
-/* 
+/*
  * SerialPort.cpp
  *
  * Defines SerialPort class for reading, writing, and opening a port on Windows
@@ -23,7 +23,7 @@
  *
  * Function params:
  * portName:		Name of our opened serial port
- * 
+ *
  */
 SerialPort::SerialPort(const char *portName)
 {
@@ -84,9 +84,9 @@ SerialPort::~SerialPort()
 /*****************************************************************************
  * Functions
  ****************************************************************************/
- 
+
 /* Function flow:
- * --Sets the packet handler for this instance of SerialPort to a user-defined function 
+ * --Sets the packet handler for this instance of SerialPort to a user-defined function
  *
  * Function Params:
  * PacketReceivedFunction:				user-defined function location in memory
@@ -121,7 +121,7 @@ void SerialPort::setPacketHandler(PacketHandlerFunctionWithSender PacketReceived
  * data_ptr:	pointer to data's location. Used to put byte into receiving buffer
  * time_LastByteReceived:   Time stamp for when the last byte without a complete packet
  * time_Current:            Time stamp for the current time
- * clockNeedsReset:         Bool for when the time stamp should reset          
+ * clockNeedsReset:         Bool for when the time stamp should reset
  *
  */
 int SerialPort::update(uint8_t *decodeBuffer)
@@ -130,7 +130,7 @@ int SerialPort::update(uint8_t *decodeBuffer)
     uint8_t 	data;
     uint8_t*    data_ptr;
     data_ptr = &data;
-    
+
     /* Gets information about the status of the port's input buffer */
     ClearCommError(this->handler, &this->errors, &this->status);
 
@@ -155,24 +155,24 @@ int SerialPort::update(uint8_t *decodeBuffer)
             /* Decode the packet */
     		size_t numDecoded = COBS::decode(_receiveBuffer,
 									         _receiveBufferIndex,
-									    	 decodeBuffer);			
+									    	 decodeBuffer);
 
             /* If there are not enough bytes in a packet for a header, it might
                be a phantom signal? */
 			if (numDecoded < 4) return 0;
-							 
+
 			/* Execute whichever function was defined (with or w/o sender) */
 			if (_PacketReceivedFunction)
 			{
 				_PacketReceivedFunction(decodeBuffer, numDecoded);
 			}
-				
+
 			else if (_PacketReceivedFunctionWithSender)
 			{
 				_PacketReceivedFunctionWithSender(this, _receiveBuffer, numDecoded);
 			}
 
-			// Clear the buffer			
+			// Clear the buffer
 			memset(_receiveBuffer, 0, _receiveBufferIndex);
 			_receiveBufferIndex = 0;
 			return(numDecoded);
@@ -201,11 +201,11 @@ int SerialPort::update(uint8_t *decodeBuffer)
  * --Checks if a byte of a new packet has been read (OK_toGetCurrTime)
  * --Calculates how long its been since a full packet has been received
  * --If it has been over .25 seconds, the bytes are discarded
- * 
+ *
  */
 bool SerialPort::checkForBadPacket()
 {
-    if (this->OK_toGetCurrTime) 
+    if (this->OK_toGetCurrTime)
     {
         this->time_Current = std::chrono::system_clock::now();
         this->byteless_interval = this->time_Current - this->time_LastByteReceived;
@@ -249,13 +249,13 @@ bool SerialPort::send(uint8_t *buffer, size_t buf_size)
 	{
         /* Gets status of serial port */
         ClearCommError(this->handler, &this->errors, &this->status);
-        
-        uint8_t encodedBuffer[COBS::getEncodedBufferSize(buf_size)+1];
+
+        uint8_t encodedBuffer[COBS::getEncodedBufferSize(buf_size)];
 
         size_t numEncoded = COBS::encode(buffer, buf_size, encodedBuffer);
 
-        WriteFile(this->handler, (void*) encodedBuffer, numEncoded + 1, &bytesSend, 0);
-		
+        WriteFile(this->handler, (void*) encodedBuffer, numEncoded, &bytesSend, 0);
+
         return true;
     }
     else return false;
@@ -270,4 +270,3 @@ bool SerialPort::isConnected()
 {
     return this->connected;
 }
-

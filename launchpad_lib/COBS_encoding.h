@@ -49,13 +49,17 @@ public:
 
         while (read_index < size)
         {
+            /* If the byte is actually the PACKETMARKER, set the last overhead byte/
+               packetMarker to be the # of bytes away the next PACKETMARKER is */
             if (buffer[read_index] == PACKETMARKER)
             {
-                encodedBuffer[code_index] = (code - PACKETMARKER) & 0xFF;
+                encodedBuffer[code_index] = (code + PACKETMARKER) & 0xFF;
                 code = 1;
                 code_index = write_index++;
                 read_index++;
             }
+            /* If the byte is not the PACKETMARKER, set the encoded buffer byte to
+    			     the current read byte.  */
             else
             {
                 encodedBuffer[write_index++] = buffer[read_index++];
@@ -70,7 +74,12 @@ public:
             }
         }
 
-        encodedBuffer[code_index] = code;
+        encodedBuffer[code_index] = (code + PACKETMARKER) & 0xFF;
+        /* NOTE!!!!
+        	--We need an additional packetMarker here so that the message sent contains
+        	  an ending packetMarker
+        	*/
+        encodedBuffer[write_index++] = PACKETMARKER;
 
         return write_index;
     }
@@ -86,8 +95,7 @@ public:
                          size_t size,
                          uint8_t* decodedBuffer)
     {
-        if (size == 0)
-            return 0;
+        if (size == 0) return 0;
 
         size_t read_index  = 0;
         size_t write_index = 0;
@@ -96,7 +104,9 @@ public:
 
         while (read_index < size)
         {
-            code = (encodedBuffer[read_index] + PACKETMARKER) & 0xFF;
+            /* the first code byte is the # of bytes we'll have to read until the
+      			   next packetMarker is hit */
+            code = (encodedBuffer[read_index] - PACKETMARKER) & 0xFF;
 
             if (read_index + code > size && code != 1)
             {
@@ -124,7 +134,7 @@ public:
     /// \returns the maximum size of the required encoded buffer.
     static size_t getEncodedBufferSize(size_t unencodedBufferSize)
     {
-        return unencodedBufferSize + unencodedBufferSize / 254 + 1;
+        return unencodedBufferSize + unencodedBufferSize / 254 + 2;
     }
 
 };

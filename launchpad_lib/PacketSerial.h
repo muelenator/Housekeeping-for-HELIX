@@ -1,22 +1,22 @@
 /*
  * PacketSerial.h
- * 
- * A wrapper class for the Arduino 'Stream' library that enables the use of 
+ *
+ * A wrapper class for the Arduino 'Stream' library that enables the use of
  * (in this case) COBS encoding.
- * 
+ *
  * Copyright (c) 2011 Christopher Baker <https://christopherbaker.net>
  * Copyright (c) 2011 Jacques Fortier <https://github.com/jacquesf/COBS-Consistent-Overhead-Byte-Stuffing>
- * 
+ *
  * SPDX-License-Identifier:	MIT
- * 
+ *
  */
 
 #pragma once
-/* Max data length is: 
+/* Max data length is:
  *	-- +4 header bytes
  *	-- +255 data bytes
  *  -- +1 CRC (checksum) byte
- * For max packet size, 
+ * For max packet size,
  *	-- +2 COBS overhead
  *	-- +1 COBS packet marker
  */
@@ -113,7 +113,7 @@ public:
      * --If the packetMarker is received, the function decodes the COBS encoded
      *   packet and executes the PacketReceivedFunction.
      * --Returns the number of bytes decoded.
-     * 
+     *
      * Function variables:
      * data:                Buffer to store one byte from the incoming data stream
      * _decodeBuffer:       Buffer create to store decoded packet
@@ -121,57 +121,56 @@ public:
      * _receiveBufferIndex: Current location of the read from the data stream
      * time_LastByteReceived:   Time stamp for when the last byte without a complete packet
      * time_Current:            Time stamp for the current time
-     * clockNeedsReset:         Bool for when the time stamp should reset  
-     * 
+     * clockNeedsReset:         Bool for when the time stamp should reset
+     *
      */
-    uint8_t update()
-    {
-        /* If this instance has not been passed a stream, return */
-        if (_stream == nullptr) return 0;
+     uint8_t update()
+     {
+          /* If this instance has not been passed a stream, return */
+          if (_stream == nullptr) return 0;
 
-        /* Evaluate time stamps */
-        if (checkForBadPacket()) return EBADLEN;
+          /* Evaluate time stamps */
+          if (checkForBadPacket()) return EBADLEN;
 
-        /* While there are bytes available to read */
-        while (_stream->available() > 0)
-        {
-            /* Read in one bte */
-			uint8_t data = _stream->read();
+          /* While there are bytes available to read */
+          while (_stream->available() > 0)
+          {
+              /* Read in one bte */
+			        uint8_t data = _stream->read();
 
-            /* Evaluate time stamps */
-            if (checkForBadPacket()) return EBADLEN;
-			
-            /* If that byte is the packet marker, decode the message */
-            if (data == PACKETMARKER)
-            {
-                /* Stop the clock */
-                OK_toGetCurrTime = false;
+              /* Evaluate time stamps */
+              if (checkForBadPacket()) return EBADLEN;
 
-				uint8_t _decodeBuffer[_receiveBufferIndex];
-				
-				if (_onPacketFunction || _onPacketFunctionWithSender)
-                {
-                    size_t numDecoded = COBS::decode(_receiveBuffer,
+              /* If that byte is the packet marker, decode the message */
+              if (data == PACKETMARKER)
+              {
+                  /* Stop the clock */
+                  OK_toGetCurrTime = false;
+
+				          uint8_t _decodeBuffer[_receiveBufferIndex];
+
+				          if (_onPacketFunction || _onPacketFunctionWithSender)
+                  {
+                      size_t numDecoded = COBS::decode(_receiveBuffer,
                                                             _receiveBufferIndex,
                                                             _decodeBuffer);
+                      /* If one zero byte was found, discard it */
+					            if (numDecoded == 0) return 0;
 
-                    /* If one zero byte was found, discard it */										
-					if (numDecoded == 0) return 0;										
-					
-                    /* Execute whichever function was defined (w/ or w/o sender) */
-                    if (_onPacketFunction)
-                    {
-                        _onPacketFunction(_decodeBuffer, numDecoded);
+                      /* Execute whichever function was defined (w/ or w/o sender) */
+                      if (_onPacketFunction)
+                      {
+                          _onPacketFunction(_decodeBuffer, numDecoded);
+                      }
+                      else if (_onPacketFunctionWithSender)
+                      {
+                          _onPacketFunctionWithSender(this, _decodeBuffer, numDecoded);
+                      }
                     }
-                    else if (_onPacketFunctionWithSender)
-                    {
-                        _onPacketFunctionWithSender(this, _decodeBuffer, numDecoded);
-                    }
+                    /* Clear the buffer */
+                    _receiveBufferIndex = 0;
+				            return 0;
                 }
-                /* Clear the buffer */
-                _receiveBufferIndex = 0;
-				return 0;
-            }
             /* If not, add it to the encoded packet being received */
             else
             {
@@ -193,7 +192,7 @@ public:
 
     	return 0;
     }
-    
+
     /* Function flow:
     * --Send function takes a non-COBS encoded input, encodes it, and writes it
     *   to the serial line.
@@ -212,17 +211,14 @@ public:
 
         uint8_t _encodeBuffer[COBS::getEncodedBufferSize(size)];
 
-        size_t numEncoded = COBS::encode(buffer,
-                                                size,
-                                                _encodeBuffer);
+        size_t numEncoded = COBS::encode(buffer, size, _encodeBuffer);
 
         _stream->write(_encodeBuffer, numEncoded);
-        _stream->write((uint8_t) PACKETMARKER);
     }
 
     bool checkForBadPacket()
     {
-        if (OK_toGetCurrTime) 
+        if (OK_toGetCurrTime)
         {
             time_Current = micros();
             byteless_interval = time_Current - time_LastByteReceived;
@@ -262,7 +258,7 @@ private:
 
     PacketHandlerFunction _onPacketFunction = nullptr;
     PacketHandlerFunctionWithSender _onPacketFunctionWithSender = nullptr;
-    
+
 	/* Timing variables for discarding incomplete packets */
 	uint32_t time_LastByteReceived, time_Current;
 	uint32_t byteless_interval;

@@ -179,11 +179,11 @@ bool SerialPort::send(uint8_t *buffer, size_t buf_size)
     /* if the message is not empty & the size of the message wasn't 0 by accident */
     if (buffer != 0 && buf_size != 0)
 	{
-        uint8_t encodedBuffer[COBS::getEncodedBufferSize(buf_size)+1];
+        uint8_t encodedBuffer[COBS::getEncodedBufferSize(buf_size)];
 
         size_t numEncoded = COBS::encode(buffer, buf_size, encodedBuffer);
 
-        bytesSend = write(this->handler, (void*) encodedBuffer, numEncoded + 1);
+        bytesSend = write(this->handler, (void*) encodedBuffer, numEncoded);
 
         return true;
     }

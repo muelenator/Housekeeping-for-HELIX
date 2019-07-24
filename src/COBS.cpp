@@ -57,17 +57,17 @@ size_t COBS::encode(const uint8_t* buffer,
 	/* while the current byte being read is inside the message string*/
     while (read_index < size)
     {
-    	/* If the byte is actually the PACKETMARKER, set the last overhead byte/
-			packetMarker to be the # of bytes away the next PACKETMARKER is */
+      	/* If the byte is actually the PACKETMARKER, set the last overhead byte/
+  			   packetMarker to be the # of bytes away the next PACKETMARKER is */
         if (buffer[read_index] == PACKETMARKER)
         {
-            encodedBuffer[code_index] = code; // (code - PACKETMARKER) & 0xFF;
+            encodedBuffer[code_index] = (code + PACKETMARKER) & 0xFF;
             code = 1;
             code_index = write_index++;
             read_index++;
         }
         /* If the byte is not the PACKETMARKER, set the encoded buffer byte to
-			the current read byte.  */
+			     the current read byte.  */
         else
         {
             encodedBuffer[write_index++] = buffer[read_index++];
@@ -82,13 +82,13 @@ size_t COBS::encode(const uint8_t* buffer,
         }
     }
 
-	/* Set the previous PACKETMARKER location to the # of bytes away the next one is */
-    encodedBuffer[code_index] = code;
+	  /* Set the previous PACKETMARKER location to the # of bytes away the next one is */
+    encodedBuffer[code_index] = (code + PACKETMARKER) & 0xFF;
     /* NOTE!!!!
     	--We need an additional packetMarker here so that the message sent contains
     	  an ending packetMarker
-    	*/
-    encodedBuffer[write_index] = PACKETMARKER;
+      	*/
+    encodedBuffer[write_index++] = PACKETMARKER;
 
     return write_index;
 }
@@ -121,16 +121,16 @@ size_t COBS::decode(const uint8_t* encodedBuffer,
 	/* while the current byte being read is inside the message string*/
     while (read_index < size)
     {
-		/* the first code byte is the # of bytes we'll have to read until the
-			next packetMarker is hit */
-        code = encodedBuffer[read_index]; // (encodedBuffer[read_index] + PACKETMARKER) & 0xFF;
+    		/* the first code byte is the # of bytes we'll have to read until the
+    			next packetMarker is hit */
+        code = (encodedBuffer[read_index] - PACKETMARKER) & 0xFF;
 
-		/* NOTE!!!!
-			--size + 1 vs. size
-			This is some hiccup with the C++ here. The compiler evaluates
-			the '>' operator as >=, so we need to include a +1 after size*/
-		/* if the 'code' is read and says that the next zero is outside the packet,
-			this shit is broke, so end the program */
+    		/* NOTE!!!!
+    			--size + 1 vs. size
+    			This is some hiccup with the C++ here. The compiler evaluates
+    			the '>' operator as >=, so we need to include a +1 after size*/
+    		/* if the 'code' is read and says that the next zero is outside the packet,
+    			this shit is broke, so end the program */
         if (read_index + code > size + 1 && code != 1)
         {
             return 0;
@@ -164,5 +164,5 @@ size_t COBS::decode(const uint8_t* encodedBuffer,
  */
 size_t COBS::getEncodedBufferSize(size_t unencodedBufferSize)
 {
-    return unencodedBufferSize + unencodedBufferSize / 254 + 1;
+    return unencodedBufferSize + unencodedBufferSize / 254 + 2;
 }
