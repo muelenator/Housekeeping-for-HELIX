@@ -12,7 +12,7 @@
 #include "SerialPort.h"
 #include "../COBS.h"
 
-#define BAUD 9600
+#define BAUD 1125000
 
 /*****************************************************************************
  * Contructor/Destructor
