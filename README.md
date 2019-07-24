@@ -201,7 +201,7 @@ This build has been tested with a baud rate up to 1.5e7 bps.
 
 
 ### Next steps
-Linux reliability
+Linux reliability, update COBS encoding
 
 Contributors
 ------------
