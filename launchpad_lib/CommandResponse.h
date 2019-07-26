@@ -22,7 +22,9 @@ void whatToDoIfMap(housekeeping_hdr_t * hdr_out, uint8_t (&downDevs)[7][254], ui
 void whatToDoIfSetPriority(housekeeping_prio_t * hdr_prio, housekeeping_hdr_t * hdr_out, uint8_t * comPriorList);
 														
 void whatToDoIfHeaterControl(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out, Stream & stream);
-							
+
+void whatToDoIfTestMode(uint16_t * numTestPackets_p, housekeeping_hdr_t * hdr_out);
+
 bool checkThatPriority(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out, uint8_t numSends);
 												  
 /* If the criteria for these errors is fulfilled  */

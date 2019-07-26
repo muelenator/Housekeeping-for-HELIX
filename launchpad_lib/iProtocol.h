@@ -46,6 +46,7 @@ typedef enum housekeeping_cmd
 	eMapDevices = 3,
 	eHeaterControl = 4,
 	//2-249 are board-specific
+	eTestMode = 249,
 	eSendLowPriority = 250,
 	eSendMedPriority = 251,
 	eSendHiPriority = 252,

@@ -186,6 +186,23 @@ void whatToDoIfHeaterControl(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * h
 	matchData(hdr_out);
 }
 
+void whatToDoIfTestMode(uint16_t* numTestPackets_p, housekeeping_hdr_t* hdr_out)
+{
+	// set the output header based on what PSA said
+	// the length can be 2 to send back the number of test packets that still need to be sent.
+    // the incoming packet has two extra bytes, so its length was 2 and that was just at first to decide how many packets to send. 
+	hdr_out->dst = eSFC;
+	hdr_out->cmd = eTestMode;
+	hdr_out->len = 2;
+	/* Fill outgoing data with the numTestPackets*/
+	for (int i = 0; i < hdr_out->len; i++)
+	{
+		outgoingData[i] = *numTestPackets_p;
+		*numTestPackets_p = *numTestPackets_p >> 8;
+	}
+	matchData(hdr_out);
+}
+
 /* Function flow:
  * --Checks if this device has any commands of a certain priority
  * --Checks if the incoming destination is eBroadcast
