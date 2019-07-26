@@ -17,14 +17,14 @@
 #define BAUD 1125000
 
 /* Declare instances of PacketSerial to set up the serial lines */
-PacketSerial upStream1;
 PacketSerial downStream1;
-PacketSerial downStream2;
-PacketSerial downStream3;
-PacketSerial downStream4;
-PacketSerial downStream5;
-PacketSerial downStream6;
-PacketSerial downStream7;
+PacketSerial upStream1;
+PacketSerial upStream2;
+PacketSerial upStream3;
+PacketSerial upStream4;
+PacketSerial upStream5;
+PacketSerial upStream6;
+PacketSerial upStream7;
 
 /*******************************************************************************
 * Defines
@@ -42,13 +42,13 @@ housekeeping_hdr_t * hdr_in; 		housekeeping_hdr_t * hdr_out;
 housekeeping_err_t * hdr_err;		housekeeping_prio_t * hdr_prio;
 
 /* Memory buffers for housekeeping system functions */
-uint8_t numDevices = 0;						// Keep track of how many devices are downstream
+uint8_t numDevices = 0;						// Keep track of how many devices are upstream
 uint8_t commandPriority[255] = {0};			// Each command's priority takes up one byte
-PacketSerial * serialDevices[7] = {&downStream1, &downStream2, &downStream3, 
-									   &downStream4, &downStream5,
-									   &downStream6, &downStream7};	
+PacketSerial * serialDevices[7] = {&upStream1, &upStream2, &upStream3, 
+									   &upStream4, &upStream5,
+									   &upStream6, &upStream7};	
 									    // Pointer to an address's serial port
-uint8_t addressList[7][254] = {0}; 		// List of all downstream devices
+uint8_t addressList[7][254] = {0}; 		// List of all upstream devices
 
 /* Utility variables for internal use */
 uint8_t checkin;		// Used for comparing checksum values
@@ -62,35 +62,35 @@ int bus = 0;
 void setup()
 {
 	Serial.begin(BAUD);
-	upStream1.setStream(&Serial);
-	upStream1.setPacketHandler(&checkHdr);
+	downStream1.setStream(&Serial);
+	downStream1.setPacketHandler(&checkHdr);
 	
-//	downStream1.setStream(&Serial);
-//	downStream1.setPacketHandler(&checkHdr);
+//	upStream1.setStream(&Serial);
+//	upStream1.setPacketHandler(&checkHdr);
   
 	Serial1.begin(BAUD);
-	downStream2.setStream(&Serial1);
-	downStream2.setPacketHandler(&checkHdr);
+	upStream2.setStream(&Serial1);
+	upStream2.setPacketHandler(&checkHdr);
 	
 	Serial2.begin(BAUD);
-	downStream3.setStream(&Serial2);
-	downStream3.setPacketHandler(&checkHdr);
+	upStream3.setStream(&Serial2);
+	upStream3.setPacketHandler(&checkHdr);
 	
 	Serial3.begin(BAUD);
-	downStream4.setStream(&Serial3);
-	downStream4.setPacketHandler(&checkHdr);
+	upStream4.setStream(&Serial3);
+	upStream4.setPacketHandler(&checkHdr);
 	
 	Serial4.begin(BAUD);
-	downStream5.setStream(&Serial4);
-	downStream5.setPacketHandler(&checkHdr);
+	upStream5.setStream(&Serial4);
+	upStream5.setPacketHandler(&checkHdr);
 	
 	Serial5.begin(BAUD);
-	downStream6.setStream(&Serial5);
-	downStream6.setPacketHandler(&checkHdr);
+	upStream6.setStream(&Serial5);
+	upStream6.setPacketHandler(&checkHdr);
 	
 	Serial7.begin(BAUD);
-	downStream7.setStream(&Serial7);
-	downStream7.setPacketHandler(&checkHdr);
+	upStream7.setStream(&Serial7);
+	upStream7.setPacketHandler(&checkHdr);
 
 	/* Point to data in a way that it can be read as a header */
 	hdr_out = (housekeeping_hdr_t *) outgoingPacket;
@@ -104,14 +104,14 @@ void setup()
 void loop()
 {
 	/* Continuously read in one byte at a time until a packet is received */
-	if (upStream1.update() != 0) badPacketReceived(&upStream1);
 	if (downStream1.update() != 0) badPacketReceived(&downStream1);
-	if (downStream2.update() != 0) badPacketReceived(&downStream2);
-	if (downStream3.update() != 0) badPacketReceived(&downStream3);
-	if (downStream4.update() != 0) badPacketReceived(&downStream4);
-	if (downStream5.update() != 0) badPacketReceived(&downStream5);
-	if (downStream6.update() != 0) badPacketReceived(&downStream6);
-	if (downStream7.update() != 0) badPacketReceived(&downStream7);
+	if (upStream1.update() != 0) badPacketReceived(&upStream1);
+	if (upStream2.update() != 0) badPacketReceived(&upStream2);
+	if (upStream3.update() != 0) badPacketReceived(&upStream3);
+	if (upStream4.update() != 0) badPacketReceived(&upStream4);
+	if (upStream5.update() != 0) badPacketReceived(&upStream5);
+	if (upStream6.update() != 0) badPacketReceived(&upStream6);
+	if (upStream7.update() != 0) badPacketReceived(&upStream7);
 }
 
 /*******************************************************************************
@@ -164,13 +164,13 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 			/* Forward downstream if eBroadcast */
 			if (hdr_in->dst == eBroadcast)
 			{
-				downStream1.send(buffer, len);
-				downStream2.send(buffer, len);
-				downStream3.send(buffer, len);
-				downStream4.send(buffer, len);
-				downStream5.send(buffer, len);
-				downStream6.send(buffer, len);
-				downStream7.send(buffer, len);
+				upStream1.send(buffer, len);
+				upStream2.send(buffer, len);
+				upStream3.send(buffer, len);
+				upStream4.send(buffer, len);
+				upStream5.send(buffer, len);
+				upStream6.send(buffer, len);
+				upStream7.send(buffer, len);
 			}
 			
 			/* If a send all priority command is received */
@@ -192,7 +192,7 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 				{
 					outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
 																&outgoingPacket[hdr_size+hdr_out->len]);
-					upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+					downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 				}
 			}
 			/* If a send all command is received */
@@ -214,20 +214,20 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 			error_badArgs(hdr_in, hdr_out, hdr_err);	
 			outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
 															       &outgoingPacket[hdr_size+hdr_out->len]);
-			upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+			downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 		}
 	}
   
 	/* If the message wasn't meant for this device pass it along */
 	else 
 	{
-		if (sender == &upStream1)
+		if (sender == &downStream1)
 		{
-			/* Send downstream away from SFC */
-			forwardDown(buffer, len);
+			/* Send upstream away from SFC */
+			forwardUp(buffer, len);
 		}
-		/* Send up stream towards SFC */
-		else forwardUp(buffer, len, sender);
+		/* Send  downstream towards SFC */
+		else forwardDown(buffer, len, sender);
 	}
 }
 
@@ -258,7 +258,29 @@ void commandCenter()
 	{
 		whatToDoIfMap(hdr_out, addressList, numDevices);
 	}
-	
+
+  else if (hdr_in->cmd == eTestMode)
+  {
+    uint16_t numTestPackets = 0; // to get to the data bytes
+    uint16_t *numTestPackets_p = &numTestPackets;
+    // if the length of data attached is not zero then go into testmode and send the number of packets that was sent with the command 
+    if(hdr_in->len == 2){
+      // bitshift the first data byte to be an extra byte long then bitwise or with the next data byte.
+      numTestPackets= ((uint16_t) *((uint8_t *) hdr_in + 4 + 1) << 8) | (uint8_t) *((uint8_t *) hdr_in + 4 + 2);
+      while (numTestPackets){
+        whatToDoIfTestMode(numTestPackets_p, hdr_out);
+        numTestPackets--;
+        // do a send (after numtestpackets is 0 then will go on to the other send). 
+        outgoingPacket[hdr_size+hdr_out->len] = computeMySum(outgoingPacket, &outgoingPacket[hdr_size+hdr_out->len]);
+        downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+      }
+    }
+    // else send bad length error
+    else{
+      // build error header and send that?
+    }
+  }
+  
 	else if (hdr_in->cmd == eReset)
 	{
 		SysCtlReset();
@@ -273,7 +295,7 @@ void commandCenter()
 	/* Compute checksum & send out packet */
 	outgoingPacket[hdr_size+hdr_out->len] = computeMySum(outgoingPacket, 
 														 &outgoingPacket[hdr_size+hdr_out->len]);
-	upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+	downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 }
 
 /* Function flow:
@@ -285,11 +307,11 @@ void commandCenter()
  * sender:		PacketSerial instance (serial line) where the message was received
  * 
  */
-void forwardUp(const uint8_t * buffer, size_t len, const void * sender)
+void forwardDown(const uint8_t * buffer, size_t len, const void * sender)
 {
 	/* Continue to send the message */
-	upStream1.send(buffer, len);
-	checkUpBoundDst(sender);
+	downStream1.send(buffer, len);
+	checkDownBoundDst(sender);
 }
 
 /* Function flow:
@@ -302,9 +324,9 @@ void forwardUp(const uint8_t * buffer, size_t len, const void * sender)
  * len:			Size (in bytes) of the incoming packet above
  * 
  */
-void forwardDown(const uint8_t * buffer, size_t len)
+void forwardUp(const uint8_t * buffer, size_t len)
 {
-	bus = checkDownBoundDst();
+	bus = checkUpBoundDst();
 	if (bus) serialDevices[bus]->send(buffer,len);
 }
 
@@ -318,7 +340,7 @@ void forwardDown(const uint8_t * buffer, size_t len)
  * sender:		PacketSerial instance (serial line) where the message was received
  * 
  */
-void checkUpBoundDst(const void * sender)
+void checkDownBoundDst(const void * sender)
 {
 	for (int i=0; i<7; i++)
 	{
@@ -341,7 +363,7 @@ void checkUpBoundDst(const void * sender)
  * --If the device is not known, an error is thrown
  * 
  */
-int checkDownBoundDst()
+int checkUpBoundDst()
 {
 	for (int i=0; i<7; i++)
 	{
@@ -355,7 +377,7 @@ int checkDownBoundDst()
 	error_badDest(hdr_in, hdr_out, hdr_err);
 	outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
 															&outgoingPacket[hdr_size+hdr_out->len]);
-	upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+	downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 	return 0;
 }
 
@@ -386,5 +408,5 @@ void badPacketReceived(PacketSerial * sender)
 	error_badLength(hdr_in, hdr_out, hdr_err);
 	outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
 														       &outgoingPacket[hdr_size+hdr_out->len]);
-	upStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+	downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 }
