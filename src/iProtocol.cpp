@@ -35,8 +35,8 @@ uint8_t checkDat = 0;
  * checkDat:	The running total of summed bytes in the packet
  *
  */
-
-uint8_t computeMySum(const uint8_t * first, const uint8_t * last)
+// Rick's old checksum functions
+/*uint8_t computeMySum(const uint8_t * first, const uint8_t * last)
 {
 	checkDat = 0;
 	while (first!= last)	
@@ -46,7 +46,13 @@ uint8_t computeMySum(const uint8_t * first, const uint8_t * last)
 	}
 	return checkDat;
 }
+bool checkMySum(uint8_t & checkI, const uint8_t & checkO)
+{
+	if (checkI != checkO) return false;
 
+	else return true;
+}
+*/
 /* Function flow:
  * --Returns true if the sender checksum (CheckI) matches the computed checksum
  *	 (checkO)
@@ -56,13 +62,23 @@ uint8_t computeMySum(const uint8_t * first, const uint8_t * last)
  * checkO:		Checksum computed by this device from the sender's packet
  * 
  */
-bool checkMySum(uint8_t & checkI, const uint8_t & checkO)
-{
-	if (checkI != checkO) return false;
 
+void fillChecksum(uint8_t* p) {
+	housekeeping_hdr_t* hdr = (housekeeping_hdr_t*)p;
+	uint8_t* data = p + sizeof(housekeeping_hdr_t);
+	uint8_t* cksum = data + hdr->len;
+	*cksum = 0;
+	for (; p != cksum; p++) *cksum -= *p;
+}
+bool verifyChecksum(uint8_t* p) {
+	housekeeping_hdr_t* hdr = (housekeeping_hdr_t*)p;
+	uint8_t* data = p + sizeof(housekeeping_hdr_t);
+	uint8_t* cksum = data + hdr->len;
+	uint8_t sum = 0;
+	for (; p <= cksum; p++) sum += *p;
+	if ((uint8_t)sum != 0) return false;
 	else return true;
 }
-
 /* Function flow:
  * --Checks if a device address is inside a given array of addresses
  * --If the device is known (within the list), function returns its location

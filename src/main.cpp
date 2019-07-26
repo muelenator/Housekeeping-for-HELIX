@@ -39,7 +39,7 @@ using std::cin;
 using std::endl;
 
 /* Serial port name: see above */
-const char *port_name = "/dev/ttyACM0";
+const char *port_name = "COM3";
 
 /* Name this device */
 housekeeping_id myComputer = eSFC;
@@ -64,7 +64,6 @@ housekeeping_err_t * hdr_err;
 housekeeping_prio_t * hdr_prio;
 
 /* Utility variableas: */
-uint8_t checkin;				// Checksum value for read-in
 uint8_t lengthBeingSent;		// Actual
 
 uint16_t numberIN;
@@ -96,9 +95,7 @@ void setup()
 	lengthBeingSent = setupMyPacket(hdr_out, hdr_prio);	// Fills in rest of header
 
 	/* Compute checksum for outgoing packet + add it to the end of packet */
-	outgoingPacket[4+lengthBeingSent] = computeMySum(outgoingPacket,
-											 &outgoingPacket[4 + lengthBeingSent]);
-
+	fillChecksum((uint8_t*)outgoingPacket);
 	cout << "The computed checksum is " << (int) outgoingPacket[4+lengthBeingSent];
 	cout << ". Enter this value, or input a different checksum to check protocol reliability.";
 	cout << endl;
@@ -179,9 +176,7 @@ void commandCenter(const uint8_t * buffer)
 		resetAll(hdr_out);
 
 		/* Compute checksum for outgoing packet + add it to the end of packet */
-		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket,
-											 &outgoingPacket[4 + hdr_out->len]);
-
+		fillChecksum((uint8_t*)outgoingPacket);
 		needs_reset = true;
 	}
 	else
@@ -217,12 +212,17 @@ void checkHdr(const uint8_t * buffer, size_t len)
 	 * If it was, check and execute the command  */
 	if (hdr_in->dst == myComputer)
 	{
+		/*
+		cout << "checksum byte before fillChecksum is " << (int) * ((uint8_t*)buffer + sizeof(housekeeping_hdr_t) + hdr_in->len) << endl;
+		cout << "the bytes are: " << endl;
+		uint8_t* p = (uint8_t*)buffer;
+		uint8_t* data = p + sizeof(housekeeping_hdr_t);
+		uint8_t* cksum = data + hdr_in->len;
+		*cksum = 0;
+		for (; p <= cksum; p++) cout << (int)* p << endl;
 		/* Check for data corruption */
-		checkin = computeMySum(buffer, &buffer[4 + hdr_in->len]);
-
-		cout << "The computed checkSum is: " << (int) checkin << endl << endl;
-
-		if (checkMySum(checkin, buffer[4 + hdr_in->len]))
+		
+		if (verifyChecksum((uint8_t*)buffer))
 		{
 			commandCenter(buffer);
 		}
@@ -237,9 +237,7 @@ void checkHdr(const uint8_t * buffer, size_t len)
 		resetAll(hdr_out);
 
 		/* Compute checksum for outgoing packet + add it to the end of packet */
-		outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket,
-											 &outgoingPacket[4 + hdr_out->len]);
-
+		fillChecksum((uint8_t*)outgoingPacket);
 		needs_reset = true;
 	}
 }
@@ -250,7 +248,7 @@ void checkHdr(const uint8_t * buffer, size_t len)
 *******************************************************************************/
 int main()
 {
-	/* Point to data in a way that it can be read as known data structures */
+/* Point to data in a way that it can be read as known data structures */
 	hdr_in = (housekeeping_hdr_t *) incomingPacket;
 	hdr_out = (housekeeping_hdr_t *) outgoingPacket;
 	hdr_err = (housekeeping_err_t *) (incomingPacket+4);
@@ -275,10 +273,13 @@ int main()
 
 	/* Start up your program & set the outgoing packet data + send it out */
 	startUp(hdr_out);
-	outgoingPacket[4+hdr_out->len] = computeMySum(outgoingPacket,
-											 &outgoingPacket[4 + hdr_out->len]);
-	TM4C.send(outgoingPacket, 4 + hdr_out->len + 1);
+	fillChecksum((uint8_t*)outgoingPacket);
 
+	if (verifyChecksum((uint8_t*) outgoingPacket)) TM4C.send(outgoingPacket, 4 + hdr_out->len + 1);
+	else {
+		cout << "errrororror" << endl;
+		return 0;
+	}
 	/* On startup: Reset number of found devices & errors to 0 */
 	memset(downStreamDevices, 0, numDevices);
 	numDevices = 0;

@@ -46,6 +46,7 @@ typedef enum housekeeping_cmd
 	eMapDevices = 3,
 	eHeaterControl = 4,
 	//2-249 are board-specific
+	eTestMode = 249,
 	eSendLowPriority = 250,
 	eSendMedPriority = 251,
 	eSendHiPriority = 252,
@@ -96,12 +97,17 @@ typedef struct housekeeping_prio_t
 /*******************************************************************************
 * Functions
 *******************************************************************************/
+
 /* Computes the checksum of a message
  * Parameters are the range of an array, lowest value is closed, highest is open*/
-uint8_t computeMySum(const uint8_t * first, const uint8_t * last);
+//uint8_t computeMySum(const uint8_t * first, const uint8_t * last);
 
 /* Returns true if two checksum values are the same */
-bool checkMySum(uint8_t & checkI, const uint8_t & checkO);
+//bool checkMySum(uint8_t & checkI, const uint8_t & checkO);
+
+void fillChecksum(uint8_t* p);
+bool verifyChecksum(uint8_t * p);
+
 
 /* Find address in an array of addresses */
 uint8_t * findMe(uint8_t * first, uint8_t * last, uint8_t address);
