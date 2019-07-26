@@ -150,9 +150,7 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 	if (hdr_in->dst == myID || hdr_in->dst == eBroadcast)
 	{
 		/* Check for data corruption */
-		checkin = computeMySum(buffer, &buffer[len - 1]);
-		
-		if (checkMySum(checkin, buffer[len - 1]))
+		if (verifyChecksum((uint8_t *) buffer))
 		{
 			/* Check for bad length	*/
 			if (hdr_in->len != len - 4 - 1)
@@ -190,8 +188,7 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 				/* If there are no commands of that type & the destination isn't eBroadcast*/
 				if (checkThatPriority(hdr_in, hdr_out, numSends))
 				{
-					outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
-																&outgoingPacket[hdr_size+hdr_out->len]);
+					fillChecksum((uint8_t *) outgoingPacket);
 					downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 				}
 			}
@@ -212,9 +209,8 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len)
 		else
 		{
 			error_badArgs(hdr_in, hdr_out, hdr_err);	
-			outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
-															       &outgoingPacket[hdr_size+hdr_out->len]);
-			downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+      fillChecksum((uint8_t *) outgoingPacket);
+      downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 		}
 	}
   
@@ -266,12 +262,12 @@ void commandCenter()
     // if the length of data attached is not zero then go into testmode and send the number of packets that was sent with the command 
     if(hdr_in->len == 2){
       // bitshift the first data byte to be an extra byte long then bitwise or with the next data byte.
-      numTestPackets= ((uint16_t) *((uint8_t *) hdr_in + 4 + 1) << 8) | (uint8_t) *((uint8_t *) hdr_in + 4 + 2);
+      numTestPackets= ((uint16_t) *((uint8_t *) hdr_in + 4 + 1) << 8) | (uint8_t) *((uint8_t *) hdr_in + 4);
       while (numTestPackets){
         whatToDoIfTestMode(numTestPackets_p, hdr_out);
         numTestPackets--;
         // do a send (after numtestpackets is 0 then will go on to the other send). 
-        outgoingPacket[hdr_size+hdr_out->len] = computeMySum(outgoingPacket, &outgoingPacket[hdr_size+hdr_out->len]);
+        fillChecksum((uint8_t *) outgoingPacket);
         downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
       }
     }
@@ -292,9 +288,8 @@ void commandCenter()
 		error_badCommand(hdr_in, hdr_out, hdr_err);
 	}
 	
-	/* Compute checksum & send out packet */
-	outgoingPacket[hdr_size+hdr_out->len] = computeMySum(outgoingPacket, 
-														 &outgoingPacket[hdr_size+hdr_out->len]);
+	/*  checksum & send out packet */
+  fillChecksum((uint8_t *) outgoingPacket);
 	downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 }
 
@@ -375,8 +370,7 @@ int checkUpBoundDst()
 
 	/* If it wasn't found, throw an error */
 	error_badDest(hdr_in, hdr_out, hdr_err);
-	outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
-															&outgoingPacket[hdr_size+hdr_out->len]);
+  fillChecksum((uint8_t *) outgoingPacket);
 	downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 	return 0;
 }
@@ -406,7 +400,6 @@ void badPacketReceived(PacketSerial * sender)
 
 	hdr_out->src = myID;
 	error_badLength(hdr_in, hdr_out, hdr_err);
-	outgoingPacket[hdr_size + hdr_out->len] = computeMySum(outgoingPacket, 
-														       &outgoingPacket[hdr_size+hdr_out->len]);
+  fillChecksum((uint8_t *) outgoingPacket);
 	downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
 }
