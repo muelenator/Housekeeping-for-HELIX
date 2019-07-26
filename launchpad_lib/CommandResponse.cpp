@@ -166,8 +166,8 @@ void whatToDoIfHeaterControl(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * h
         
 	else if(hdr_in->len == 2)
 	{
-		channel	 = 	(uint8_t) *((uint8_t *) hdr_in + 4 + 1);
-        val		 = 	(uint8_t) *((uint8_t *) hdr_in + 4 + 2);
+		channel	 = 	(uint8_t) *((uint8_t *) hdr_in + 4);
+        val		 = 	(uint8_t) *((uint8_t *) hdr_in + 4 + 1);
 		
         for(int i=0; i < 4; i++)
 		{
