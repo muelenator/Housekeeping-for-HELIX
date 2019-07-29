@@ -1,9 +1,9 @@
-/* 
+/*
  * userTest.h
  *
  * General template functions for a specific use case of the main.cpp program.
- * --Program prompts the user for an intended destination and command, then sends 
- * 	 out a COBS encoded data packet to that destination.
+ * --Program prompts the user for an intended destination and command, then sends
+ *       out a COBS encoded data packet to that destination.
  *
  */
 
@@ -31,10 +31,10 @@ void whatToDoIfSetPriority(housekeeping_hdr_t * hdr_in, housekeeping_prio_t * hd
 /* Reads out the error type received + prints a log of all errors since startup */
 void whatToDoIfError(housekeeping_err_t * hdr_err, uint8_t * errorsReceived, uint8_t & numError);
 
-/* Reads out the device map received from a device */			
+/* Reads out the device map received from a device */
 void whatToDoIfMap(housekeeping_hdr_t * hdr_in);
 
-/* Sets up a reset command going to all devices */				
+/* Sets up a reset command going to all devices */
 void resetAll(housekeeping_hdr_t * hdr_out);
 
 /* Puts the outgoing data inside the outgoing packet */

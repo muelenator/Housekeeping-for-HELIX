@@ -22,17 +22,17 @@ class COBS
 {
 public:
 
-	COBS();
+COBS();
 
-    static size_t encode(const uint8_t* buffer,
-                         size_t size,
-                         uint8_t* encodedBuffer);
+static size_t encode(const uint8_t* buffer,
+                     size_t size,
+                     uint8_t* encodedBuffer);
 
-    static size_t decode(const uint8_t* encodedBuffer,
-                         size_t size,
-                         uint8_t* decodedBuffer);
+static size_t decode(const uint8_t* encodedBuffer,
+                     size_t size,
+                     uint8_t* decodedBuffer);
 
-    static size_t getEncodedBufferSize(size_t unencodedBufferSize);
+static size_t getEncodedBufferSize(size_t unencodedBufferSize);
 };
 
 #endif // COBS_H

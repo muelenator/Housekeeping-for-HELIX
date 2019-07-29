@@ -1,7 +1,7 @@
 /*
  * CommandResponse.cpp
- * 
- * Defines a set of functions to act as responses to received commands and 
+ *
+ * Defines a set of functions to act as responses to received commands and
  * error protocols
  *
  */
@@ -24,51 +24,51 @@ uint32_t * tmp;
 /* Function flow:
  * --Fills outgoing header w/protocol standard
  * --Board response to ping pong command return
- * 
+ *
  * Function params:
  * hdr_out:		Pointer to outgoing packet header
  */
 void whatToDoIfPingPong(housekeeping_hdr_t * hdr_out)
 {
 	/* Create the header */
-	hdr_out->dst = eSFC;		// Intended destination of packet
-	hdr_out->cmd = ePingPong;	// Command for what do to with packet
-	hdr_out->len = 0;			// Size of data after the header
+	hdr_out->dst = eSFC; // Intended destination of packet
+	hdr_out->cmd = ePingPong; // Command for what do to with packet
+	hdr_out->len = 0; // Size of data after the header
 }
 
 /* Function flow:
  * --Fills outgoing header w/protocol standard
  * --Takes a reading from its internal temp sensor
  * --Fills outgoing data buffer with the 32 bit reading
- * 
+ *
  * Function params:
  * hdr_out:		Pointer to outgoing packet header
  * */
 void whatToDoIfISR(housekeeping_hdr_t * hdr_out)
-{	
+{
 	/* Create the header */
-	hdr_out->dst = eSFC;			// Intended destination of packet
-	hdr_out->cmd = eIntSensorRead;	// Command for what do to with packet
-	hdr_out->len = 4;				// Size of data after the header
-	
+	hdr_out->dst = eSFC; // Intended destination of packet
+	hdr_out->cmd = eIntSensorRead; // Command for what do to with packet
+	hdr_out->len = 4; // Size of data after the header
+
 	TempRead = analogRead(TEMPSENSOR);
-	
+
 	tmp = &TempRead;
-	
+
 	/* Fills outgoing data buffer */
 	for(int i=0; i < hdr_out->len; i++)
-    {
-        outgoingData[i] = *tmp;
-        *tmp = *tmp>>8;
-    }
-	
+	{
+		outgoingData[i] = *tmp;
+		*tmp = *tmp>>8;
+	}
+
 	matchData(hdr_out);
 }
 
 /* Function flow:
  * --Fills outgoing header w/protocol standard
  * --Fills outgoing data array with its internal device list
- * 
+ *
  * Function params:
  * hdr_out:		Pointer to outgoing packet header
  * downDevs:	The device's 2d array of downstream devices
@@ -78,12 +78,12 @@ void whatToDoIfISR(housekeeping_hdr_t * hdr_out)
 void whatToDoIfMap(housekeeping_hdr_t * hdr_out, uint8_t (&downDevs)[7][254], uint8_t num)
 {
 	/* Create the header */
-	hdr_out->dst = eSFC;			// Intended destination of packet
-	hdr_out->cmd = eMapDevices;		// Command for what do to with packet
-	hdr_out->len = num;				// Size of data after the header
-	
+	hdr_out->dst = eSFC; // Intended destination of packet
+	hdr_out->cmd = eMapDevices; // Command for what do to with packet
+	hdr_out->len = num; // Size of data after the header
+
 	if (num == 0) return;
-	
+
 	/* Fill in data array with device list */
 	for (int i=0; i < 7; i++)
 	{
@@ -95,7 +95,7 @@ void whatToDoIfMap(housekeeping_hdr_t * hdr_out, uint8_t (&downDevs)[7][254], ui
 			}
 		}
 	}
-	
+
 	matchData(hdr_out);
 }
 
@@ -104,26 +104,26 @@ void whatToDoIfMap(housekeeping_hdr_t * hdr_out, uint8_t (&downDevs)[7][254], ui
  * --Changes the intended command's priority
  * --Fills outgoing packet header w/protocol standard
  * --Sets outgoing data bytes to the new priority settings for SFC confirmation
- * 		--Not part of HSK protocol
- * 
+ *      --Not part of HSK protocol
+ *
  * Function params:
  * hdr_prio:	Pointer to the priority header attached to the incoming packet
  * hdr_out:		Pointer to outgoing packet header
  * comPriorList:	List of all command priorities
- * 
+ *
  *  */
 void whatToDoIfSetPriority(housekeeping_prio_t * hdr_prio, housekeeping_hdr_t * hdr_out,
-													    uint8_t * comPriorList)
+                           uint8_t * comPriorList)
 {
 	comPriorList[(uint8_t) hdr_prio->command] = (uint8_t) hdr_prio->prio_type;
-	
+
 	hdr_out->dst = eSFC;
 	hdr_out->cmd = eSetPriority;
 	hdr_out->len = 2;
-	
+
 	outgoingData[0] = hdr_prio->command;
 	outgoingData[1] = hdr_prio->prio_type;
-	
+
 	matchData(hdr_out);
 }
 
@@ -133,49 +133,49 @@ void whatToDoIfSetPriority(housekeeping_prio_t * hdr_prio, housekeeping_hdr_t * 
  * --Writes to the heater control board (?) commands it can understand
  * --Waits for a reply byte to verify the message was received
  * --Sends that reply byte back to the SFC for verification
- * 
+ *
  * Function params:
  * hdr_in:		Incoming header pointer, can find the data pts from the location
  * hdr_out:		Pointer to the outgoing packet header
  * stream:		Serial port where the heater control is connected
- * 
+ *
  * Function variables:
  * val:			Potentiometer value to set
  * channel:		Which potentiometer
- * 
+ *
  *  */
 void whatToDoIfHeaterControl(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out, Stream & stream)
 {
 	uint8_t val;
 	uint8_t channel;
-	
+
 	hdr_out->dst = eSFC;
 	hdr_out->cmd = eHeaterControl;
 	hdr_out->len = 1;
-	
+
 	/* These two  */
 	stream.write(254);
 	stream.write(171);
-	
+
 	/* If 1 byte, change all channels */
-    if (hdr_in->len == 1)
+	if (hdr_in->len == 1)
 	{
-        val= (uint8_t) *((uint8_t *) hdr_in + 4);
+		val= (uint8_t) *((uint8_t *) hdr_in + 4);
 		stream.write(val);
-    }
-        
+	}
+
 	else if(hdr_in->len == 2)
 	{
-		channel	 = 	(uint8_t) *((uint8_t *) hdr_in + 4);
-        val		 = 	(uint8_t) *((uint8_t *) hdr_in + 4 + 1);
-		
-        for(int i=0; i < 4; i++)
+		channel  =  (uint8_t) *((uint8_t *) hdr_in + 4);
+		val      =  (uint8_t) *((uint8_t *) hdr_in + 4 + 1);
+
+		for(int i=0; i < 4; i++)
 		{
 			stream.write(channel);
 			stream.write(val);
-        }
-    }
-	
+		}
+	}
+
 	/* Wait for that confirmation byte */
 	while (stream.read() < 0)
 	{
@@ -190,15 +190,17 @@ void whatToDoIfTestMode(uint16_t* numTestPackets_p, housekeeping_hdr_t* hdr_out)
 {
 	// set the output header based on what PSA said
 	// the length can be 2 to send back the number of test packets that still need to be sent.
-    // the incoming packet has two extra bytes, so its length was 2 and that was just at first to decide how many packets to send. 
+	// the incoming packet has two extra bytes, so its length was 2 and that was just at first to decide how many packets to send.
 	hdr_out->dst = eSFC;
 	hdr_out->cmd = eTestMode;
 	hdr_out->len = 2;
 	/* Fill outgoing data with the numTestPackets*/
+	uint8_t tmpVal = *numTestPackets_p;
+	uint8_t * tmp = &tmpVal;
 	for (int i = 0; i < hdr_out->len; i++)
 	{
-		outgoingData[i] = *numTestPackets_p;
-		*numTestPackets_p = *numTestPackets_p >> 8;
+		outgoingData[i] = *tmp;
+		*tmp = *tmp >> 8;
 	}
 	matchData(hdr_out);
 }
@@ -208,16 +210,16 @@ void whatToDoIfTestMode(uint16_t* numTestPackets_p, housekeeping_hdr_t* hdr_out)
  * --Checks if the incoming destination is eBroadcast
  * --Overall, makes sure the device responds when it has no commands of a certain
  *   priority only if the destination is not eBroadcast
- * 
+ *
  * Function params:
  * hdr_in:		Pointer to the incoming packet header
  * hdr_out:		Pointer to the outgoing packet header
  * numSends:	Number of commands this device has of a certain priority
  *
- *  
+ *
  */
 bool checkThatPriority(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out,
-												    uint8_t numSends)
+                       uint8_t numSends)
 {
 	if (hdr_in->dst != eBroadcast && numSends == 0)
 	{
@@ -232,10 +234,10 @@ bool checkThatPriority(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
 /* These functions are called if the device has detected an error.
  * They follow the HSK error protocol by filling the outgoing header &
  * outgoing error header.
- * 
+ *
  *  */
 void error_badDest(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
-											  , housekeeping_err_t * hdr_err)
+                   , housekeeping_err_t * hdr_err)
 {
 	/* Outgoing housekeeping header */
 	hdr_out->dst = eSFC;
@@ -248,7 +250,7 @@ void error_badDest(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
 }
 
 void error_badLength(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
-											     , housekeeping_err_t * hdr_err)
+                     , housekeeping_err_t * hdr_err)
 {
 	/* Outgoing housekeeping header */
 	hdr_out->dst = eSFC;
@@ -261,7 +263,7 @@ void error_badLength(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
 }
 
 void error_badCommand(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
-											     , housekeeping_err_t * hdr_err)
+                      , housekeeping_err_t * hdr_err)
 {
 	/* Outgoing housekeeping header */
 	hdr_out->dst = eSFC;
@@ -274,7 +276,7 @@ void error_badCommand(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
 }
 
 void error_badArgs(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
-											  , housekeeping_err_t * hdr_err)
+                   , housekeeping_err_t * hdr_err)
 {
 	/* Outgoing housekeeping header */
 	hdr_out->dst = eSFC;
@@ -289,10 +291,10 @@ void error_badArgs(housekeeping_hdr_t * hdr_in, housekeeping_hdr_t * hdr_out
 /* Function flow:
  * --Dereferences the outgoing packet data location and fills it with the data
  *   from a function which was executed prior
- * 
+ *
  * Function params:
  * hdr_out:		Pointer to the outgoing packet header
- * 
+ *
  */
 void matchData(housekeeping_hdr_t * hdr_out)
 {

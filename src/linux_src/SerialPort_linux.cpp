@@ -23,37 +23,37 @@
  * portName:		Name of our opened serial port in SerialPort_linux
  *
  */
-SerialPort::SerialPort(const char *portName)
+SerialPort::SerialPort(const char *portName, int SerialBaud)
 {
-    this->connected = false;
+	this->connected = false;
 
-    this->handler = open (portName, O_RDWR | O_NOCTTY | O_NONBLOCK); // O_SYNC | //)_NDELAY
+	this->handler = open (portName, O_RDWR | O_NOCTTY | O_NONBLOCK);
 
-    if (this->handler < 0)
-    {
+	if (this->handler < 0)
+	{
 		printf ("error %d opening %s: %s\n", errno, portName, strerror (errno));
 		return;
-    }
-    /* Setup serial port parameters in a DCB struct */
-    else
-    {
-   		set_interface_attribs (this->handler, B1152000, 0); // set baudrate, 8n1 (no parity)
-		// set_mincount (this->handler, 0); 	// set no blocking
-        this->connected = true;				// set status to 'connected'
-        usleep(WAIT_TIME*1000);					// sleep until the board wakes up
-        /* flush the input buffer, prep for new communication. I don't think this works */
-    	// tcflush(this->handler, TCIFLUSH);
+	}
+	/* Setup serial port parameters in a DCB struct */
+	else
+	{
+		set_interface_attribs (this->handler, SerialBaud, 0); // set baudrate, 8n1 (no parity)
+		// set_mincount (this->handler, 0);     // set  blocking IF O_NONBLOCK not set
+		this->connected = true; // set status to 'connected'
+		usleep(WAIT_TIME*1000); // sleep until the board wakes up
+		/* flush the input buffer, prep for new communication. I don't think this works */
+		tcflush(this->handler, TCIFLUSH);
 
-    }
+	}
 }
 
 /* Define the destructor to close the port */
 SerialPort::~SerialPort()
 {
-    if (this->connected){
-        this->connected = false;
-        close(this->handler);		//Closing the serial port
-    }
+	if (this->connected) {
+		this->connected = false;
+		close(this->handler); //Closing the serial port
+	}
 }
 
 /*****************************************************************************
@@ -100,27 +100,27 @@ void SerialPort::setPacketHandler(PacketHandlerFunctionWithSender PacketReceived
  */
 int SerialPort::update(uint8_t *decodeBuffer)
 {
-    int		bytesAvailable;
-    uint8_t 	data;
-    uint8_t* 	data_ptr;
-    data_ptr = 	&data;
+	int bytesAvailable;
+	uint8_t data;
+	uint8_t*    data_ptr;
+	data_ptr =  &data;
 
-    /* Evaluate time stamps */
-    if (checkForBadPacket()) return 0;
+	/* Evaluate time stamps */
+	if (checkForBadPacket()) return 0;
 	bytesAvailable = read(this->handler, data_ptr, 1);
 
 	while (bytesAvailable > 0)
 	{
 		if (checkForBadPacket()) return 0;
 
-       	if (*data_ptr == PACKETMARKER)
-    	{
-            /* Stop the clock */
-            this->OK_toGetCurrTime = false;
+		if (*data_ptr == PACKETMARKER)
+		{
+			/* Stop the clock */
+			this->OK_toGetCurrTime = false;
 
-    		size_t numDecoded = COBS::decode(_receiveBuffer,
-									         _receiveBufferIndex,
-									    	 decodeBuffer);
+			size_t numDecoded = COBS::decode(_receiveBuffer,
+			                                 _receiveBufferIndex,
+			                                 decodeBuffer);
 			// Execute whichever function was defined (with or w/o sender)
 			if (_PacketReceivedFunction)
 			{
@@ -140,7 +140,7 @@ int SerialPort::update(uint8_t *decodeBuffer)
 		else
 		{
 			this->time_LastByteReceived = std::chrono::system_clock::now();
-            this->OK_toGetCurrTime = true;
+			this->OK_toGetCurrTime = true;
 
 			if ((_receiveBufferIndex + 1) < MAX_PACKET_LENGTH)
 			{
@@ -155,7 +155,7 @@ int SerialPort::update(uint8_t *decodeBuffer)
 		bytesAvailable = read(this->handler, data_ptr, 1);
 	}
 
-    return 0;
+	return 0;
 }
 
 /* Function flow:
@@ -176,18 +176,18 @@ int SerialPort::update(uint8_t *decodeBuffer)
 bool SerialPort::send(uint8_t *buffer, size_t buf_size)
 {
 	uint8_t bytesSend;
-    /* if the message is not empty & the size of the message wasn't 0 by accident */
-    if (buffer != 0 && buf_size != 0)
+	/* if the message is not empty & the size of the message wasn't 0 by accident */
+	if (buffer != 0 && buf_size != 0)
 	{
-        uint8_t encodedBuffer[COBS::getEncodedBufferSize(buf_size)];
+		uint8_t encodedBuffer[COBS::getEncodedBufferSize(buf_size)];
 
-        size_t numEncoded = COBS::encode(buffer, buf_size, encodedBuffer);
+		size_t numEncoded = COBS::encode(buffer, buf_size, encodedBuffer);
 
-        bytesSend = write(this->handler, (void*) encodedBuffer, numEncoded);
+		bytesSend = write(this->handler, (void*) encodedBuffer, numEncoded);
 
-        return true;
-    }
-    else return false;
+		return true;
+	}
+	else return false;
 }
 
 /* Function flow:
@@ -197,30 +197,30 @@ bool SerialPort::send(uint8_t *buffer, size_t buf_size)
  */
 bool SerialPort::isConnected()
 {
-    return this->connected;
+	return this->connected;
 }
 
 bool SerialPort::checkForBadPacket()
 {
 	if (this->OK_toGetCurrTime)
-    {
-        this->time_Current = std::chrono::system_clock::now();
-        this->byteless_interval = this->time_Current - this->time_LastByteReceived;
+	{
+		this->time_Current = std::chrono::system_clock::now();
+		this->byteless_interval = this->time_Current - this->time_LastByteReceived;
 
-        /* If an incomplete packet was received, print an error and show the buffer data */
-        if (this->byteless_interval.count() > .25)
-        {
-            this->OK_toGetCurrTime = false;
-            std::cout << "Error: Incomplete packet received. Bytes received:";
-            for (int i=0; i < this->_receiveBufferIndex; i++)
-            {
-                std::cout << (int) this->_receiveBuffer[this->_receiveBufferIndex];
-                std::cout << " ";
-            }
-            this->_receiveBufferIndex = 0;
-            std::cout << std::endl << std::endl;
-            return true;
-        }
-    }
-    return false;
+		/* If an incomplete packet was received, print an error and show the buffer data */
+		if (this->byteless_interval.count() > .25)
+		{
+			this->OK_toGetCurrTime = false;
+			std::cout << "Error: Incomplete packet received. Bytes received:";
+			for (int i=0; i < this->_receiveBufferIndex; i++)
+			{
+				std::cout << (int) this->_receiveBuffer[this->_receiveBufferIndex];
+				std::cout << " ";
+			}
+			this->_receiveBufferIndex = 0;
+			std::cout << std::endl << std::endl;
+			return true;
+		}
+	}
+	return false;
 }
