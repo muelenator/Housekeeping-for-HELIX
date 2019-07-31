@@ -477,7 +477,7 @@ void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePa
 // if length was actually placed then go into testmode, else build badlength error.
   if (hdr->len) {
    //construct data incoming to be the num testpackets and send the data packet in a while loop and decrement numtestpackets?
-    uint16_t numTestPackets = ((uint16_t) (*(data) << 8)) | *(data+1) ; // figure out the correct way to get 2 bytes into a 16_t
+    uint16_t numTestPackets = ((uint16_t) (*(data+1) << 8)) | *(data) ; // figure out the correct way to get 2 bytes into a 16_t
     while(numTestPackets){
       *(respData) = numTestPackets;    
       *(respData+1) = numTestPackets >> 8;
