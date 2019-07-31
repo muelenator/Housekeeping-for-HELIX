@@ -46,6 +46,8 @@ typedef enum housekeeping_cmd
 	eMapDevices = 3,
 	eHeaterControl = 4,
 	eTestHeaterControl = 5,
+    eAutoPriorityPeriod = 6,
+	ePacketCount = 7, 
 	eTestMode = 249,
 	eSendLowPriority = 250,
 	eSendMedPriority = 251,
