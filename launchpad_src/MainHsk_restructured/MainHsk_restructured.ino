@@ -378,20 +378,26 @@ void badPacketReceived(PacketSerial * sender)
 // with data (len != 0).
 
 int handleLocalWrite(uint8_t localCommand, uint8_t *data, uint8_t len) {
+  int retval = 0;
   switch(localCommand) {
-  eTestHeaterControl:
-    return whatToDoIfTestHeaterControl((uint8_t*) data, (uint8_t) len);
-  eHeaterControl:
-    return whatToDoIfHeaterControl((uint8_t*) data, (uint8_t) len);
-    // construct a header out and put the output there, if not the right value report error?
-//  eAutoPriorityPeriod:
+  case eTestHeaterControl:
+    retval = whatToDoIfTestHeaterControl((uint8_t*) data, (uint8_t) len);
+    break;
+  case eHeaterControl:
+    retval = whatToDoIfHeaterControl((uint8_t*) data, (uint8_t) len);
+    break;
+  case eAutoPriorityPeriod:
   // got an autoPriorityPeriod command
-//    return setAutoPriorityPeriods(data, len);
-//  ePacketCount:
-//    return -EBADLEN;
+//    retval = setAutoPriorityPeriods(data, len);
+    break;
+  case ePacketCount:
+    retval = EBADLEN;
+    break;
   default:
-    return -EBADCOMMAND;    
+    retval=EBADCOMMAND;    
+    break;
   }
+  return retval;
 }
 
 int handleLocalRead(uint8_t localCommand, uint8_t *buffer) {
@@ -405,12 +411,14 @@ int handleLocalRead(uint8_t localCommand, uint8_t *buffer) {
     whatToDoIfISR(buffer);
     retval=4;
     break;
-//  eAutoPriorityPeriod:
+  case eAutoPriorityPeriod:
 //    memcpy(buffer, (uint8_t *) currentAutoPriorityPeriods, sizeof(currentAutoPriorityPeriods));
-//    return sizeof(currentAutoPriorityPeriods);
-//  ePacketCount:
+//   retval = sizeof(currentAutoPriorityPeriods);
+    break;
+  case ePacketCount:
 //    memcpy(buffer, (uint8_t *) currentPacketCount, sizeof(currentPacketCount));
-//    return sizeof(currentPacketCount);
+//    retval = sizeof(currentPacketCount);
+    break;
   default:
     retval=EBADCOMMAND;
   }  
@@ -435,7 +443,7 @@ void handleLocalCommand(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * respon
   respHdr->dst = hdr->src;
   if (hdr->len) {
     retval = handleLocalWrite(hdr->cmd, data, hdr->len); // retval is negative construct the baderror hdr and send that instead. 
-    if(retval==0) {
+    if(retval>=0) {
       respHdr->cmd = hdr->cmd;
       respHdr->len = retval; // response bytes of the write.
     }
@@ -456,10 +464,10 @@ void handleLocalCommand(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * respon
       housekeeping_err_t *err = (housekeeping_err_t *) respData;
       buildError(err, respHdr, hdr, retval); // the err pointer is pointing to the data of the response packet based on the line above so this fn fills that packet. 
     }
-    fillChecksum(responsePacketBuffer);
-    // send to SFC
-    downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );
   }
+  fillChecksum(responsePacketBuffer);
+  // send to SFC
+  downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );
 }
 void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePacketBuffer) {
   housekeeping_hdr_t *respHdr = (housekeeping_hdr_t *) responsePacketBuffer;
@@ -471,7 +479,8 @@ void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePa
    //construct data incoming to be the num testpackets and send the data packet in a while loop and decrement numtestpackets?
     uint16_t numTestPackets = ((uint16_t) (*(data) << 8)) | *(data+1) ; // figure out the correct way to get 2 bytes into a 16_t
     while(numTestPackets){
-      *respData = numTestPackets;
+      *(respData) = numTestPackets;    
+      *(respData+1) = numTestPackets >> 8;
       respHdr->cmd = hdr->cmd;
       respHdr->len = 0x02; // response bytes of the write.
       fillChecksum(responsePacketBuffer);
