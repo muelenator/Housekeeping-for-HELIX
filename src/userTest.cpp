@@ -161,10 +161,13 @@ uint8_t setupMyPacket(housekeeping_hdr_t *hdr_out,
   hdr_out->len = cinNumber();
 
   /* Ask if it is a fake length for an error test */
-  cout << "Attach 'length' number of bytes to the end of the header? (y/n) ";
+  if (hdr_out->len == 0) {
+    return hdr_out->len;
+  }
 
+  cout << "Attach 'length' number of bytes to the end of the header? (y/n) ";
   cin >> userIN3;
-  while (cin) {
+  while (cin && (int)hdr_out->len != 0) {
     if (userIN3 == 'y') {
       cout << "Press enter after inputting each byte as characters:";
       cout << endl;
