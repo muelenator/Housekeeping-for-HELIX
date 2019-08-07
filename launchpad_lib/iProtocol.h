@@ -14,6 +14,7 @@
 #pragma once
 #include <stdint.h>
 
+#define MIN_PERIOD      100
 /* Standard error types */
 #define EBADDEST 		-1	// Packet received for an unknown destination
 #define EBADCOMMAND		-2  // Packet contained an unknown command
@@ -43,11 +44,11 @@ typedef enum housekeeping_cmd
 	eSetPriority = 1,
 	//2-249 are board-specific: these are test commands
 	eIntSensorRead = 2,
-	eMapDevices = 3,
-	eHeaterControl = 4,
-	eTestHeaterControl = 5,
-    eAutoPriorityPeriod = 6,
-	ePacketCount = 7, 
+	ePacketCount = 3,
+	eMapDevices = 4,
+	eHeaterControl = 5,
+	eTestHeaterControl = 6,
+    eAutoPriorityPeriod = 7,
 	eTestMode = 249,
 	eSendLowPriority = 250,
 	eSendMedPriority = 251,
@@ -96,6 +97,14 @@ typedef struct housekeeping_prio_t
 } housekeeping_prio_t;
 
 
+typedef struct autoPriorityPeriods_t {
+	uint16_t lowPriorityPeriod;
+	uint16_t medPriorityPeriod;
+	uint16_t highPriorityPeriod;
+} autoPriorityPeriods_t;
+
+
+
 /*******************************************************************************
 * Functions
 *******************************************************************************/
@@ -122,3 +131,4 @@ extern housekeeping_hdr_t * hdr_in;		// pointer for loc of incoming data header
 extern housekeeping_hdr_t * hdr_out;	// pointer for loc of outgoing header
 extern housekeeping_err_t * hdr_err;	// pointer for loc of error header
 extern housekeeping_prio_t * hdr_prio;	// pointer for loc of priority header
+extern autoPriorityPeriods_t * auto_periods; // pointer for loc of auto priority periods

@@ -136,7 +136,7 @@ void whatToDoIfSetPriority(housekeeping_prio_t * hdr_prio, housekeeping_hdr_t * 
  * channel:		Which potentiometer
  * 
  *  */
-int whatToDoIfHeaterControl(uint8_t * data, uint8_t len)
+int whatToDoIfHeaterControl(uint8_t * data, uint8_t len, uint8_t * respData)
 {	
 	/* If 1 byte, change all channels  to data byte*/ 
 	// will write the serial.write to the linduino here
@@ -144,6 +144,17 @@ int whatToDoIfHeaterControl(uint8_t * data, uint8_t len)
 	//needs to be about respData packets..
 	int retval = 0;
 	(0x01 & len) ? retval=1 : retval=2;
+	*respData = 254;
+	if (retval == 1) {
+		*(respData + 1) = 170;
+		*(respData + 2) = *data;
+	}
+	else if (retval == 2) {
+		*(respData + 1) = 171;
+		*(respData + 2) = *data;
+		*(respData + 3) = *(data + 1);
+	}
+	else retval = EBADLEN;
 //	(0x01 & len) ? serial.write(170) : serial.write(171);
 	return retval;
 	// now just write the next value, and if len >1 write the second byte in data also. 

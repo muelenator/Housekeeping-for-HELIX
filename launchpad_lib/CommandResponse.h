@@ -21,7 +21,7 @@ void whatToDoIfMap(housekeeping_hdr_t * hdr_out, uint8_t (&downDevs)[7][254], ui
 
 void whatToDoIfSetPriority(housekeeping_prio_t * hdr_prio, housekeeping_hdr_t * hdr_out, uint8_t * comPriorList);
 														
-int whatToDoIfHeaterControl(uint8_t * data, uint8_t len);
+int whatToDoIfHeaterControl(uint8_t * data, uint8_t len, uint8_t * respData);
 
 int whatToDoIfTestHeaterControl(uint8_t* data, uint8_t len);
 
