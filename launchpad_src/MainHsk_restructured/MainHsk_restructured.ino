@@ -14,8 +14,10 @@
 
 #include <driverlib/sysctl.h>
 
-#define BAUD 1125000
-
+#define BAUD 1125000 // baud rate
+#define TEST_MODE_PERIOD 100 // period in milliseconds between testmode packets being sent
+#define FIRST_LOCAL_COMMAND 2 // value of hdr->cmd that is the first command local to the board
+#define NUM_LOCAL_CONTROLS 2 // how many commands total are local to the board
 /* Declare instances of PacketSerial to set up the serial lines */
 PacketSerial downStream1;
 PacketSerial upStream1;
@@ -37,13 +39,13 @@ housekeeping_id myID = eMainHsk;
  * so there shouldn't be any over-writing here. */
 uint8_t outgoingPacket [MAX_PACKET_LENGTH] ={0}; 
 
-/* Use pointers for all device's housekeeping headers */
+/* Use pointers for all device's housekeeping headers and the autopriorityperiods*/
 housekeeping_hdr_t * hdr_in;     housekeeping_hdr_t * hdr_out;
 housekeeping_err_t * hdr_err;   housekeeping_prio_t * hdr_prio;
-
+autoPriorityPeriods_t * currentAutoPriorityPeriods;
 /* Memory buffers for housekeeping system functions */
 uint8_t numDevices = 0;           // Keep track of how many devices are upstream
-uint8_t commandPriority[255] = {0};     // Each command's priority takes up one byte
+uint8_t commandPriority[NUM_LOCAL_CONTROLS] = {0};     // Each command's priority takes up one byte
 PacketSerial * serialDevices[7] = {&upStream1, &upStream2, &upStream3, 
                      &upStream4, &upStream5,
                      &upStream6, &upStream7}; 
@@ -55,6 +57,12 @@ uint8_t checkin;    // Used for comparing checksum values
 size_t hdr_size = sizeof(housekeeping_hdr_t)/sizeof(hdr_out->src); // size of the header
 uint8_t numSends = 0; // Used to keep track of number of priority commands executed
 int bus = 0;
+unsigned long timelastpacket;
+unsigned long time1;
+uint32_t nextLowPacket;
+uint32_t nextMedPacket;
+uint32_t nextHighPacket;
+uint16_t currentPacketCount=0;
 
 /*******************************************************************************
 * Main program
@@ -95,7 +103,8 @@ void setup()
   // Point to data in a way that it can be read as a header
   hdr_out = (housekeeping_hdr_t *) outgoingPacket;
   hdr_err = (housekeeping_err_t *) (outgoingPacket + hdr_size);
-  
+//  time0=millis(); 
+  currentPacketCount=0;
 }
 
 /*******************************************************************************
@@ -112,6 +121,8 @@ void loop()
   if (upStream5.update() != 0) badPacketReceived(&upStream5);
   if (upStream6.update() != 0) badPacketReceived(&upStream6);
   if (upStream7.update() != 0) badPacketReceived(&upStream7);
+  // not supported yet, autopriority packets below
+//  checkAutoPriority(currentAutoPriorityPeriods, (uint8_t *) outgoingPacket);
 }
 
 void checkHdr(const void * sender, const uint8_t * buffer, size_t len) { 
@@ -128,19 +139,16 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len) {
       error_badArgs(hdr_in, hdr_out, hdr_err);  
       fillChecksum((uint8_t *) outgoingPacket);
       downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+      currentPacketCount++;
   }
   else {
   // Check if the message is for this device and not a broadcast
     if (hdr_in->dst == myID && hdr_in->dst != eBroadcast) {
-      // everything below this is now commented and can be reverted back but I am overhauling the way in which commands are handled.
-      // these functions need to point to the data portion of the packet to put the read or write return there 
-      // function handleLocalCommand will call localWrite or localRead 
+    // check for testmode, priority, or local command
       if(hdr_in->cmd==eTestMode) handleTestMode(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket);
-      else handleLocalCommand(hdr_in, (uint8_t *) (hdr_in + hdr_size), (uint8_t *) outgoingPacket); // this constructs the outgoingpacket when its a localcommand and sends the packet and patrick wants this sort of structure.
-      // what to do after local command is run?
-      // if it is a set priority command run handlePriority
-      // if the command is eBroadcast, also need to send the command up to other devices
-      // Forward downstream if eBroadcast
+      else if ((int)(hdr_in->cmd < 254) && (int)(hdr_in->cmd > 249)) handlePriority(hdr_in, (uint8_t *) outgoingPacket); // for doing a send of priority type.
+      else handleLocalCommand(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket); // this constructs the outgoingpacket when its a localcommand and sends the packet.
+      // to add: eBroadcast?
     } 
     else if (hdr_in->dst == eBroadcast) {
       upStream1.send(buffer, len);
@@ -158,132 +166,13 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len) {
     }    
   }
 }
- // handle priorities later
-      // If a send all priority command is received
-/*      if ((int) hdr_in->cmd < 253 && (int) hdr_in->cmd >= 250)
-//      {
-        numSends = 0;
-        // Execute all commands of that type 
-        for (int i = 0; i < 255; i++)
-        {
-          if (commandPriority[i] == (int) hdr_in->cmd -249)
-          {
-            hdr_in->cmd = (uint8_t) i;
-            commandCenter();
-            numSends++;
-          }
-        }
-        // If there are no commands of that type & the destination isn't eBroadcast
-        if (checkThatPriority(hdr_in, hdr_out, numSends))
-        {
-          fillChecksum((uint8_t *) outgoingPacket);
-          downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
-        }
-      }
-*/
-      // If a send all command is received (eSendAll is NOT a local command
-// finish this later
-/*
-      else if (hdr_in->cmd == eSendAll)
-      {
-        for (int i = FIRST_LOCAL_COMMAND; i < LAST_LOCAL_COMMAND; i++)
-        {
-          hdr_in->cmd = (uint8_t) i;
-          handleLocalCommand(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket);
-        }
-      }
-    }
-*/  
- // this void function is redudant with patricks handlLocalCommand
-/*
-void commandCenter()
-{
-  // Check commands
-  if (hdr_in->cmd == ePingPong)
-  {
-    whatToDoIfPingPong(hdr_out);
-  }
-  
-  else if (hdr_in->cmd == eSetPriority)
-  {
-    whatToDoIfSetPriority(hdr_prio, hdr_out, commandPriority);
-  }
-  
-  else if (hdr_in->cmd == eIntSensorRead)
-  {
-    whatToDoIfISR(hdr_out);
-  }
-  
-  else if (hdr_in->cmd == eMapDevices)
-  {
-    whatToDoIfMap(hdr_out, addressList, numDevices);
-  }
-
-  else if (hdr_in->cmd == eTestMode)
-  {
-    uint16_t numTestPackets = 0; // to get to the data bytes
-    uint16_t *numTestPackets_p = &numTestPackets;
-    // if the length of data attached is not zero then go into testmode and send the number of packets that was sent with the command 
-    if(hdr_in->len == 2){
-      // bitshift the first data byte to be an extra byte long then bitwise or with the next data byte.
-      numTestPackets= ((uint16_t) *((uint8_t *) hdr_in + 4 + 1) << 8) | (uint8_t) *((uint8_t *) hdr_in + 4);
-      while (numTestPackets){
-        whatToDoIfTestMode(numTestPackets_p, hdr_out);
-        numTestPackets--;
-        // do a send (after numtestpackets is 0 then will go on to the other send). 
-        fillChecksum((uint8_t *) outgoingPacket);
-        downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
-      }
-    }
-    // else send bad length error
-    else{
-      // build error header and send that?
-    }
-  }
-  
-  else if (hdr_in->cmd == eReset)
-  {
-    SysCtlReset();
-  }
-  // Else this is not a programmed command on this device. Throw error
-  else
-  {
-    error_badCommand(hdr_in, hdr_out, hdr_err);
-  }
-  
-  //  checksum & send out packet 
-  fillChecksum((uint8_t *) outgoingPacket);
-  downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
-}
-*/
-
-
-/* Function flow:
- * --Forwards the packet towards the SFC 
- * 
- * Function params:
- * buffer:    The decoded packet received
- * len:     Size (in bytes) of the incoming packet above
- * sender:    PacketSerial instance (serial line) where the message was received
- * 
- */
 void forwardDown(const uint8_t * buffer, size_t len, const void * sender)
 {
   /* Continue to send the message */
   downStream1.send(buffer, len);
   checkDownBoundDst(sender);
+  currentPacketCount++;
 }
-
-/* Function flow:
- * --Checks if the intended destination is a device known to be attached
- *    --If it is known, send the packet down the correct serial line towards that device
- *    --If it isn't, throw an error
- * 
- * Function params:
- * buffer:    The decoded packet received
- * len:     Size (in bytes) of the incoming packet above
- * 
- */
 void forwardUp(const uint8_t * buffer, size_t len)
 {
   bus = checkUpBoundDst();
@@ -323,23 +212,19 @@ void checkDownBoundDst(const void * sender)
  * --If the device is not known, an error is thrown
  * 
  */
-int checkUpBoundDst()
-{
-  for (int i=0; i<7; i++)
-  {
-    if (addressList[i][hdr_in->dst] != 0)
-    {
+int checkUpBoundDst(){
+  for (int i=0; i<7; i++){
+    if (addressList[i][hdr_in->dst] != 0){
       return i;
     }
   }
-
   /* If it wasn't found, throw an error */
   error_badDest(hdr_in, hdr_out, hdr_err);
   fillChecksum((uint8_t *) outgoingPacket);
   downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+  currentPacketCount++;
   return 0;
 }
-
 /* Function flow:
  * --Find the device address that produced the error
  * --Execute the bad length function & send the error to the SFC
@@ -349,46 +234,78 @@ int checkUpBoundDst()
  * 
  * 
  * Send an error if a packet is unreadable in some way */
-void badPacketReceived(PacketSerial * sender)
-{
+void badPacketReceived(PacketSerial * sender){
   int i = 0;
-  for (i=0; i < 7; i++)
-  {
-    if (sender == serialDevices[i])
-    {
+  for (i=0; i < 7; i++){
+    if (sender == serialDevices[i]){
       hdr_in->src = addressList[i][0];
       break;  
     }
   }
-
   if (i==7) hdr_in->src = eSFC;
-
   hdr_out->src = myID;
   error_badLength(hdr_in, hdr_out, hdr_err);
   fillChecksum((uint8_t *) outgoingPacket);
   downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
+  currentPacketCount++;
+}
+// setting auto priority commands calls this function to set the autopriority period of each category of period.  
+int setAutoPriorityPeriods(uint8_t * data, uint8_t len){
+  // assign the currentAutoPriorityPeriods to the data values
+  memcpy(currentAutoPriorityPeriods, data, len);
+  return 3;
+}
+// got a priority request from destination dst
+void handlePriority(housekeeping_hdr_t * hdr_in, uint8_t * responsePacketBuffer){
+  housekeeping_hdr_t *respHdr = (housekeeping_hdr_t *) responsePacketBuffer;
+  uint8_t *respData = responsePacketBuffer + sizeof(housekeeping_hdr_t);
+  int priority=0;
+//  int retval;
+  respHdr->src = myID;
+  respHdr->dst = hdr_in->src; 
+//  respHdr->cmd = hdr_in->cmd;
+  // priority == 4 when this function is called is code for "eSendAll"
+  // otherwise priority=1,2,3 and that maps to eSendLowPriority+priority
+  // go through every priority
+  if(hdr_in->cmd==eSendAll) priority=4;
+  else priority = hdr_in->cmd - 249;
+  for (int i=0;i<NUM_LOCAL_CONTROLS;i++) {
+    if (commandPriority[i] == (uint8_t)priority || priority==4) {
+      respHdr->cmd = (uint8_t) i + FIRST_LOCAL_COMMAND;
+      respHdr->len = handleLocalRead((uint8_t) i + FIRST_LOCAL_COMMAND, respData);
+      fillChecksum(responsePacketBuffer);
+      downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1);
+      currentPacketCount++;
+    }
+  }
 }
 
+void setCommandPriority(housekeeping_prio_t * prio, uint8_t * respData, uint8_t len) {
+//  housekeeping_prio_t * set_prio = (housekeeping_prio_t *) prio;
+  commandPriority[prio->command-FIRST_LOCAL_COMMAND] = (uint8_t) prio->prio_type;
+  memcpy(respData, (uint8_t*)prio, len);
+}
 
-
-
-  /* PSA code goes like this, hdr_in->len!=0 means local write, hdr_in->len==0 means local read */
-  // Fn to handle a local command write.
+// Fn to handle a local command write.
 // This gets called when a local command is received
 // with data (len != 0).
-
-int handleLocalWrite(uint8_t localCommand, uint8_t *data, uint8_t len) {
+int handleLocalWrite(uint8_t localCommand, uint8_t * data, uint8_t len, uint8_t * respData) {
   int retval = 0;
   switch(localCommand) {
+  case eSetPriority:
+    setCommandPriority((housekeeping_prio_t *)data,respData,len);
+//    memcpy((uint8_t*)respData, (uint8_t*)data, len);
+    retval=len;
+    break;
   case eTestHeaterControl:
     retval = whatToDoIfTestHeaterControl((uint8_t*) data, (uint8_t) len);
     break;
   case eHeaterControl:
-    retval = whatToDoIfHeaterControl((uint8_t*) data, (uint8_t) len);
+    retval = whatToDoIfHeaterControl((uint8_t*) data, (uint8_t) len, respData);
     break;
   case eAutoPriorityPeriod:
   // got an autoPriorityPeriod command
-//    retval = setAutoPriorityPeriods(data, len);
+    retval = setAutoPriorityPeriods(data, len);
     break;
   case ePacketCount:
     retval = EBADLEN;
@@ -411,13 +328,13 @@ int handleLocalRead(uint8_t localCommand, uint8_t *buffer) {
     whatToDoIfISR(buffer);
     retval=4;
     break;
-  case eAutoPriorityPeriod:
-//    memcpy(buffer, (uint8_t *) currentAutoPriorityPeriods, sizeof(currentAutoPriorityPeriods));
-//   retval = sizeof(currentAutoPriorityPeriods);
-    break;
   case ePacketCount:
-//    memcpy(buffer, (uint8_t *) currentPacketCount, sizeof(currentPacketCount));
-//    retval = sizeof(currentPacketCount);
+    memcpy(buffer, (uint8_t *) &currentPacketCount, sizeof(currentPacketCount));
+    retval = sizeof(currentPacketCount);
+    break;
+  case eAutoPriorityPeriod:
+    memcpy(buffer, (uint8_t *) &currentAutoPriorityPeriods, sizeof(currentAutoPriorityPeriods));
+    retval = sizeof(currentAutoPriorityPeriods);
     break;
   default:
     retval=EBADCOMMAND;
@@ -435,15 +352,16 @@ void buildError(housekeeping_err_t *err, housekeeping_hdr_t *respHdr, housekeepi
 }
 // Function to call first when localcommand sent. 
 // Store the result as retval (which should be bytes read or written?)
-void handleLocalCommand(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePacketBuffer) {
+void handleLocalCommand(housekeeping_hdr_t *hdr, uint8_t * data, uint8_t * responsePacketBuffer) {
   int retval=0;
   housekeeping_hdr_t *respHdr = (housekeeping_hdr_t *) responsePacketBuffer;
   uint8_t *respData = responsePacketBuffer + sizeof(housekeeping_hdr_t);
   respHdr->src = myID;
   respHdr->dst = hdr->src;
   if (hdr->len) {
-    retval = handleLocalWrite(hdr->cmd, data, hdr->len); // retval is negative construct the baderror hdr and send that instead. 
+    retval = handleLocalWrite(hdr->cmd, data, hdr->len, respData); // retval is negative construct the baderror hdr and send that instead. 
     if(retval>=0) {
+//      *respData= 5;
       respHdr->cmd = hdr->cmd;
       respHdr->len = retval; // response bytes of the write.
     }
@@ -456,9 +374,8 @@ void handleLocalCommand(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * respon
     // local read. by definition these always go downstream.
     retval = handleLocalRead(hdr->cmd, respData);
     if (retval>=0) {
-      uint8_t test_retval = retval;
       respHdr->cmd = hdr->cmd;
-      respHdr->len = test_retval; //bytes read
+      respHdr->len = retval; //bytes read
     }
     else {
       housekeeping_err_t *err = (housekeeping_err_t *) respData;
@@ -468,7 +385,9 @@ void handleLocalCommand(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * respon
   fillChecksum(responsePacketBuffer);
   // send to SFC
   downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );
+  currentPacketCount++;
 }
+
 void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePacketBuffer) {
   housekeeping_hdr_t *respHdr = (housekeeping_hdr_t *) responsePacketBuffer;
   uint8_t *respData = responsePacketBuffer + sizeof(housekeeping_hdr_t);
@@ -478,15 +397,20 @@ void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePa
   if (hdr->len) {
    //construct data incoming to be the num testpackets and send the data packet in a while loop and decrement numtestpackets?
     uint16_t numTestPackets = ((uint16_t) (*(data+1) << 8)) | *(data) ; // figure out the correct way to get 2 bytes into a 16_t
+    timelastpacket = millis();
     while(numTestPackets){
-      *(respData) = numTestPackets;    
-      *(respData+1) = numTestPackets >> 8;
-      respHdr->cmd = hdr->cmd;
-      respHdr->len = 0x02; // response bytes of the write.
-      fillChecksum(responsePacketBuffer);
-      // send to SFC
-      downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );  
-      numTestPackets--;
+      if(long (millis()-timelastpacket)>0) { // only send every 50 milliseconds?
+        *(respData) = numTestPackets;    
+        *(respData+1) = numTestPackets >> 8;
+        respHdr->cmd = hdr->cmd;
+        respHdr->len = 0x02; // response bytes of the write.
+        fillChecksum(responsePacketBuffer);
+        // send to SFC
+        downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );  
+        numTestPackets--;
+        timelastpacket = timelastpacket+TEST_MODE_PERIOD;
+        currentPacketCount++;
+      }
     }
   }
   else{
@@ -495,22 +419,24 @@ void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePa
     fillChecksum(responsePacketBuffer);
     // send to SFC
     downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );  
+    currentPacketCount++;
   }  
 }
-
-/* SPW desires
- *  ok - working fine.   Are you taking requests?
-
-If so, here they are, in order of desirability:
- - count the number of packets you send and encode that data as the first 4 bytes of the eMainHsk packets.  
- - add a random number of additional random bytes to the packets.  Dunno what the max packet size will be, but maybe 0-1kb?
- - add a few random packets from other sources (ids 2,3,4,5)
-
-If you really want to go crazy, you could have the board turn on and off packet sending, based on commands that I send it.  So, it would normally start up in the off condition.  If it receives a start command, it starts sending.  If it receives a stop command, it stops.  Picking some random command IDs, the headers would be:
-Start => [0x01][0xFC][0xFD][0x00]
-Stop => [0x01][0xFC][0xFE][0x00]
-
-This would provide a nice baseline test of the 2-way comm protocols.
-
--S
- */
+/*
+void checkAutoPriority((autoPriorityPeriods_t *) autoprioperiods, (uint8_t *) outgoing_buffer){
+  // this function should check if autopriority packets need to be sent and call functions to send those packets.  
+  // CHECK ROLLOVER
+  // check low, med, and high
+  if(long (millis()-nextLowPacket) >0){
+    // function for sending low priority packets, acts as if it was sent by sfc as query for sending that priority packets. 
+    housekeeping_hdr_t * hdr;
+    hdr->dst = eMainHsk;
+    hdr->src = eSFC;
+    hdr->cmd = eSendLowPriority;
+    hdr->len=0;
+    handleLocalCommand(hdr,0,outgoing_buffer); // will only be a read because I made len of hdr=0
+    //construct a packet with the commands on that period
+    nextLowPacket=nextLowPacket+autoprio->lowPriorityPeriod;
+  }
+}
+*/
