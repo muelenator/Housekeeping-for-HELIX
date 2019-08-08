@@ -14,7 +14,7 @@
 
 #include <driverlib/sysctl.h>
 
-#define BAUD 1125000 // baud rate
+#define BAUD 1292000 // baud rate
 #define TEST_MODE_PERIOD 100 // period in milliseconds between testmode packets being sent
 #define FIRST_LOCAL_COMMAND 2 // value of hdr->cmd that is the first command local to the board
 #define NUM_LOCAL_CONTROLS 2 // how many commands total are local to the board
@@ -46,6 +46,7 @@ autoPriorityPeriods_t * currentAutoPriorityPeriods;
 /* Memory buffers for housekeeping system functions */
 uint8_t numDevices = 0;           // Keep track of how many devices are upstream
 uint8_t commandPriority[NUM_LOCAL_CONTROLS] = {0};     // Each command's priority takes up one byte
+uint16_t autoprioperiods[3]={0};
 PacketSerial * serialDevices[7] = {&upStream1, &upStream2, &upStream3, 
                      &upStream4, &upStream5,
                      &upStream6, &upStream7}; 
@@ -58,10 +59,9 @@ size_t hdr_size = sizeof(housekeeping_hdr_t)/sizeof(hdr_out->src); // size of th
 uint8_t numSends = 0; // Used to keep track of number of priority commands executed
 int bus = 0;
 unsigned long timelastpacket;
-unsigned long time1;
-uint32_t nextLowPacket;
-uint32_t nextMedPacket;
-uint32_t nextHighPacket;
+uint32_t nextLowPacket=0;
+uint32_t nextMedPacket=0;
+uint32_t nextHighPacket=0;
 uint16_t currentPacketCount=0;
 
 /*******************************************************************************
@@ -105,6 +105,7 @@ void setup()
   hdr_err = (housekeeping_err_t *) (outgoingPacket + hdr_size);
 //  time0=millis(); 
   currentPacketCount=0;
+  currentAutoPriorityPeriods = (autoPriorityPeriods_t *) autoprioperiods;
 }
 
 /*******************************************************************************
@@ -122,7 +123,7 @@ void loop()
   if (upStream6.update() != 0) badPacketReceived(&upStream6);
   if (upStream7.update() != 0) badPacketReceived(&upStream7);
   // not supported yet, autopriority packets below
-//  checkAutoPriority(currentAutoPriorityPeriods, (uint8_t *) outgoingPacket);
+  checkAutoPriority((uint8_t *) outgoingPacket);
 }
 
 void checkHdr(const void * sender, const uint8_t * buffer, size_t len) { 
@@ -252,13 +253,13 @@ void badPacketReceived(PacketSerial * sender){
 // setting auto priority commands calls this function to set the autopriority period of each category of period.  
 int setAutoPriorityPeriods(uint8_t * data, uint8_t len){
   // assign the currentAutoPriorityPeriods to the data values
-  memcpy(currentAutoPriorityPeriods, data, len);
-  return 3;
+  memcpy((uint8_t *) currentAutoPriorityPeriods, data, len);
+  return len;
 }
 // got a priority request from destination dst
 void handlePriority(housekeeping_hdr_t * hdr_in, uint8_t * responsePacketBuffer){
   housekeeping_hdr_t *respHdr = (housekeeping_hdr_t *) responsePacketBuffer;
-  uint8_t *respData = responsePacketBuffer + sizeof(housekeeping_hdr_t);
+  uint8_t *respData = responsePacketBuffer + hdr_size;
   int priority=0;
 //  int retval;
   respHdr->src = myID;
@@ -274,7 +275,7 @@ void handlePriority(housekeeping_hdr_t * hdr_in, uint8_t * responsePacketBuffer)
       respHdr->cmd = (uint8_t) i + FIRST_LOCAL_COMMAND;
       respHdr->len = handleLocalRead((uint8_t) i + FIRST_LOCAL_COMMAND, respData);
       fillChecksum(responsePacketBuffer);
-      downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1);
+      downStream1.send(responsePacketBuffer, respHdr->len + hdr_size + 1);
       currentPacketCount++;
     }
   }
@@ -333,8 +334,8 @@ int handleLocalRead(uint8_t localCommand, uint8_t *buffer) {
     retval = sizeof(currentPacketCount);
     break;
   case eAutoPriorityPeriod:
-    memcpy(buffer, (uint8_t *) &currentAutoPriorityPeriods, sizeof(currentAutoPriorityPeriods));
-    retval = sizeof(currentAutoPriorityPeriods);
+    memcpy(buffer, (uint8_t *) currentAutoPriorityPeriods, sizeof(autoPriorityPeriods_t));
+    retval = sizeof(autoPriorityPeriods_t);
     break;
   default:
     retval=EBADCOMMAND;
@@ -384,7 +385,7 @@ void handleLocalCommand(housekeeping_hdr_t *hdr, uint8_t * data, uint8_t * respo
   }
   fillChecksum(responsePacketBuffer);
   // send to SFC
-  downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );
+  downStream1.send(responsePacketBuffer, respHdr->len + hdr_size + 1 );
   currentPacketCount++;
 }
 
@@ -422,21 +423,44 @@ void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePa
     currentPacketCount++;
   }  
 }
-/*
-void checkAutoPriority((autoPriorityPeriods_t *) autoprioperiods, (uint8_t *) outgoing_buffer){
+
+void checkAutoPriority(uint8_t * outgoing_buffer){
   // this function should check if autopriority packets need to be sent and call functions to send those packets.  
   // CHECK ROLLOVER
   // check low, med, and high
-  if(long (millis()-nextLowPacket) >0){
-    // function for sending low priority packets, acts as if it was sent by sfc as query for sending that priority packets. 
-    housekeeping_hdr_t * hdr;
-    hdr->dst = eMainHsk;
-    hdr->src = eSFC;
-    hdr->cmd = eSendLowPriority;
-    hdr->len=0;
-    handleLocalCommand(hdr,0,outgoing_buffer); // will only be a read because I made len of hdr=0
-    //construct a packet with the commands on that period
-    nextLowPacket=nextLowPacket+autoprio->lowPriorityPeriod;
+  uint8_t fakehdr[4]={0};
+  housekeeping_hdr_t * hdr = (housekeeping_hdr_t *) fakehdr;
+  hdr->dst=eMainHsk;
+  hdr->src=eSFC;
+  hdr->len=0;
+  // HIGH
+  if(currentAutoPriorityPeriods->highPriorityPeriod >= MIN_PERIOD){
+    if(long (millis()-nextHighPacket) > 0){
+      // function for sending low priority packets, acts as if it was sent by sfc as query for sending that priority packets. 
+      hdr->cmd=eSendHiPriority;
+      handlePriority(hdr,outgoing_buffer);
+      //construct a packet with the commands on that period
+      nextHighPacket=nextHighPacket+currentAutoPriorityPeriods->highPriorityPeriod;
+    }
+  }
+  // MEDIUM
+  if(currentAutoPriorityPeriods->medPriorityPeriod >= MIN_PERIOD){
+    if(long (millis()-nextMedPacket) > 0){
+      // function for sending low priority packets, acts as if it was sent by sfc as query for sending that priority packets. 
+      hdr->cmd=eSendMedPriority;
+      handlePriority(hdr,outgoing_buffer);
+      //construct a packet with the commands on that period
+      nextMedPacket=nextMedPacket+currentAutoPriorityPeriods->medPriorityPeriod;
+    }
+  }
+  // LOW
+  if(currentAutoPriorityPeriods->lowPriorityPeriod >= MIN_PERIOD){
+    if(long (millis()-nextLowPacket) > 0){
+      // function for sending low priority packets, acts as if it was sent by sfc as query for sending that priority packets. 
+      hdr->cmd=eSendLowPriority;
+      handlePriority(hdr,outgoing_buffer);
+      //construct a packet with the commands on that period
+      nextLowPacket=nextLowPacket+currentAutoPriorityPeriods->lowPriorityPeriod;
+    }
   }
 }
-*/
