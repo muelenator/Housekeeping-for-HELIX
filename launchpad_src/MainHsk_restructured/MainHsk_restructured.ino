@@ -8,16 +8,19 @@
  * 
  */
 
+#include <Core_protocol.h>
 #include <PacketSerial.h>
-#include <iProtocol.h>
-#include <CommandResponse.h>
-
 #include <driverlib/sysctl.h>
 
-#define BAUD 1292000 // baud rate
+/* These are device specific */
+#include "src/MainHSK_lib/MainHSK_protocol.h"
+#include "src/MainHSK_lib/MainHSK_support_functions.h"
+#define DOWNBAUD 1292000 // Baudrate to the SFC
+#define UPBAUD 115200    // Baudrate to upsteam devices
 #define TEST_MODE_PERIOD 100 // period in milliseconds between testmode packets being sent
 #define FIRST_LOCAL_COMMAND 2 // value of hdr->cmd that is the first command local to the board
-#define NUM_LOCAL_CONTROLS 2 // how many commands total are local to the board
+#define NUM_LOCAL_CONTROLS 6 // how many commands total are local to the board
+
 /* Declare instances of PacketSerial to set up the serial lines */
 PacketSerial downStream1;
 PacketSerial upStream1;
@@ -69,34 +72,34 @@ uint16_t currentPacketCount=0;
 *******************************************************************************/
 void setup()
 {
-  Serial.begin(BAUD);
+  Serial.begin(DOWNBAUD);
   downStream1.setStream(&Serial);
   downStream1.setPacketHandler(&checkHdr);
   
 //  upStream1.setStream(&Serial);
 //  upStream1.setPacketHandler(&checkHdr);
   
-  Serial1.begin(BAUD);
+  Serial1.begin(UPBAUD);
   upStream2.setStream(&Serial1);
   upStream2.setPacketHandler(&checkHdr);
   
-  Serial2.begin(BAUD);
+  Serial2.begin(UPBAUD);
   upStream3.setStream(&Serial2);
   upStream3.setPacketHandler(&checkHdr);
   
-  Serial3.begin(BAUD);
+  Serial3.begin(UPBAUD);
   upStream4.setStream(&Serial3);
   upStream4.setPacketHandler(&checkHdr);
   
-  Serial4.begin(BAUD);
+  Serial4.begin(UPBAUD);
   upStream5.setStream(&Serial4);
   upStream5.setPacketHandler(&checkHdr);
   
-  Serial5.begin(BAUD);
+  Serial5.begin(UPBAUD);
   upStream6.setStream(&Serial5);
   upStream6.setPacketHandler(&checkHdr);
   
-  Serial7.begin(BAUD);
+  Serial7.begin(UPBAUD);
   upStream7.setStream(&Serial7);
   upStream7.setPacketHandler(&checkHdr);
 
@@ -137,21 +140,16 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len) {
  // If the checksum didn't match, throw a bad args error
     // Check for data corruption
   if (!(verifyChecksum((uint8_t *) buffer))) {
-      error_badArgs(hdr_in, hdr_out, hdr_err);  
+//      error_badArgs(hdr_in, hdr_out, hdr_err);  
+      buildError(hdr_err, hdr_out, hdr_in, EBADARGS);
       fillChecksum((uint8_t *) outgoingPacket);
       downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
       currentPacketCount++;
   }
   else {
-  // Check if the message is for this device and not a broadcast
-    if (hdr_in->dst == myID && hdr_in->dst != eBroadcast) {
-    // check for testmode, priority, or local command
-      if(hdr_in->cmd==eTestMode) handleTestMode(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket);
-      else if ((int)(hdr_in->cmd < 254) && (int)(hdr_in->cmd > 249)) handlePriority(hdr_in, (uint8_t *) outgoingPacket); // for doing a send of priority type.
-      else handleLocalCommand(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket); // this constructs the outgoingpacket when its a localcommand and sends the packet.
-      // to add: eBroadcast?
-    } 
-    else if (hdr_in->dst == eBroadcast) {
+  // Check if the message is a broadcast
+    if (hdr_in->dst == eBroadcast) {
+      // forward upstream first. 
       upStream1.send(buffer, len);
       upStream2.send(buffer, len);
       upStream3.send(buffer, len);
@@ -159,7 +157,18 @@ void checkHdr(const void * sender, const uint8_t * buffer, size_t len) {
       upStream5.send(buffer, len);
       upStream6.send(buffer, len);
       upStream7.send(buffer, len);
-    }
+    // check for testmode, priority, or local command
+      if(hdr_in->cmd==eTestMode) handleTestMode(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket);
+      else if ((int)(hdr_in->cmd < 254) && (int)(hdr_in->cmd > 249)) handlePriority(hdr_in, (uint8_t *) outgoingPacket); // for doing a send of priority type.
+      else handleLocalCommand(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket); // this constructs the outgoingpacket when its a localcommand and sends the packet.
+    } 
+    else if (hdr_in->dst == myID && hdr_in->dst != eBroadcast) {
+    // check for testmode, priority, or local command
+      if(hdr_in->cmd==eTestMode) handleTestMode(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket);
+      else if ((int)(hdr_in->cmd < 254) && (int)(hdr_in->cmd > 249)) handlePriority(hdr_in, (uint8_t *) outgoingPacket); // for doing a send of priority type.
+      else handleLocalCommand(hdr_in, (uint8_t *) hdr_in + hdr_size, (uint8_t *) outgoingPacket); // this constructs the outgoingpacket when its a localcommand and sends the packet.
+    } 
+ 
   // If the message wasn't meant for this device pass it along (up is away from SFC and down and is to SFC
     else {
       if (sender == &downStream1) forwardUp(buffer, len); 
@@ -220,7 +229,11 @@ int checkUpBoundDst(){
     }
   }
   /* If it wasn't found, throw an error */
-  error_badDest(hdr_in, hdr_out, hdr_err);
+//  Building Error is a process right now..
+  housekeeping_hdr_t *hdr_out = (housekeeping_hdr_t *)outgoingPacket;
+  uint8_t *respData = outgoingPacket + hdr_size;
+  housekeeping_err_t *err = (housekeeping_err_t *) respData;
+  buildError(err, hdr_out, hdr_in, EBADDEST); 
   fillChecksum((uint8_t *) outgoingPacket);
   downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
   currentPacketCount++;
@@ -236,16 +249,17 @@ int checkUpBoundDst(){
  * 
  * Send an error if a packet is unreadable in some way */
 void badPacketReceived(PacketSerial * sender){
-  int i = 0;
-  for (i=0; i < 7; i++){
+  for (int i=0; i < 7; i++){
     if (sender == serialDevices[i]){
       hdr_in->src = addressList[i][0];
       break;  
     }
+    if(i==6) hdr_in->src = eSFC;
   }
-  if (i==7) hdr_in->src = eSFC;
   hdr_out->src = myID;
-  error_badLength(hdr_in, hdr_out, hdr_err);
+
+//  error_badLength(hdr_in, hdr_out, hdr_err);
+  buildError(hdr_err, hdr_out, hdr_in, EBADLEN);
   fillChecksum((uint8_t *) outgoingPacket);
   downStream1.send(outgoingPacket, hdr_size + hdr_out->len + 1);
   currentPacketCount++;
@@ -322,7 +336,6 @@ int handleLocalRead(uint8_t localCommand, uint8_t *buffer) {
   int retval = 0;
   switch(localCommand) {
   case ePingPong:
-    whatToDoIfPingPong(buffer);
     retval=0;
     break;
   case eIntSensorRead: 
@@ -332,6 +345,9 @@ int handleLocalRead(uint8_t localCommand, uint8_t *buffer) {
   case ePacketCount:
     memcpy(buffer, (uint8_t *) &currentPacketCount, sizeof(currentPacketCount));
     retval = sizeof(currentPacketCount);
+    break;
+  case eMapDevices:
+    retval = whatToDoIfMap(buffer);
     break;
   case eAutoPriorityPeriod:
     memcpy(buffer, (uint8_t *) currentAutoPriorityPeriods, sizeof(autoPriorityPeriods_t));
@@ -416,7 +432,7 @@ void handleTestMode(housekeeping_hdr_t *hdr, uint8_t *data, uint8_t * responsePa
   }
   else{
     housekeeping_err_t *err = (housekeeping_err_t *) respData;
-    buildError(err, respHdr, hdr, -3); // -3 for EBADLEN
+    buildError(err, respHdr, hdr, EBADLEN); 
     fillChecksum(responsePacketBuffer);
     // send to SFC
     downStream1.send(responsePacketBuffer, respHdr->len + sizeof(housekeeping_hdr_t) + 1 );  
@@ -429,6 +445,7 @@ void checkAutoPriority(uint8_t * outgoing_buffer){
   // CHECK ROLLOVER
   // check low, med, and high
   uint8_t fakehdr[4]={0};
+//  housekeeping_hdr_t hdr;
   housekeeping_hdr_t * hdr = (housekeeping_hdr_t *) fakehdr;
   hdr->dst=eMainHsk;
   hdr->src=eSFC;
@@ -463,4 +480,20 @@ void checkAutoPriority(uint8_t * outgoing_buffer){
       nextLowPacket=nextLowPacket+currentAutoPriorityPeriods->lowPriorityPeriod;
     }
   }
+}
+int whatToDoIfMap(uint8_t *data)
+{
+  uint8_t num = 0;
+  /* Fill in data array with device list */
+  for (int i = 0; i < 7; i++)
+  {
+    for (int j = 0; j < 254; j++)
+    {
+      if (addressList[i][j] != 0)
+      {
+        *(data + num++) = j;
+      }
+    }
+  }
+  return num;
 }
