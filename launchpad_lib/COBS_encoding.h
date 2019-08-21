@@ -67,7 +67,7 @@ static size_t encode(const uint8_t* buffer,
 
 			if (code == 0xFF)
 			{
-				encodedBuffer[code_index] = code;
+				encodedBuffer[code_index] = (code + PACKETMARKER) & 0xFF;
 				code = 1;
 				code_index = write_index++;
 			}
