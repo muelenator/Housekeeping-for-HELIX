@@ -25,6 +25,21 @@ void justReadHeader(housekeeping_hdr_t * hdr_in);
 /* This device's response to fake sensor read command */
 void whatToDoIfISR(housekeeping_hdr_t * hdr_in);
 
+/* This response to convert 4 byte thermistor resistances to floats */
+void whatToDoIfThermistorsTest(housekeeping_hdr_t * hdr_in);
+
+/* This response to convert 4 byte temp probes to floats */
+void whatToDoIfTempProbes(housekeeping_hdr_t * hdr_in);
+
+/* This response to convert 4 byte temp probes to floats */
+void whatToDoIfFloat(housekeeping_hdr_t * hdr_in);
+
+/* This response to convert 4 byte temp probes to floats */
+void whatToDoIfPressure(housekeeping_hdr_t * hdr_in);
+
+/* This response to convert 4 byte temp probes to floats */
+void whatToDoIfFlow(housekeeping_hdr_t * hdr_in);
+
 /* Displays the result of a set priority command */
 void whatToDoIfSetPriority(housekeeping_hdr_t * hdr_in, housekeeping_prio_t * hdr_prio);
 

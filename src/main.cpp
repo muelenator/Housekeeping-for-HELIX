@@ -34,6 +34,9 @@
 #include "iProtocol.h"
 #include "userTest.h"
 
+#include <fstream>
+
+
 using std::cin;
 using std::cout;
 using std::endl;
@@ -43,7 +46,7 @@ extern uint8_t cinNumber();
 /******************************************************************************/
 /* Serial port parameters */
 const char *port_name = "/dev/ttyACM0";
-int SerialBaud = 1292000;
+int SerialBaud = 1152000;
 /******************************************************************************/
 
 /* Name this device */
@@ -173,6 +176,16 @@ void commandCenter(const uint8_t *buffer) {
     whatToDoIfSetPriority(hdr_in, hdr_prio);
   } else if (hdr_in->cmd == eIntSensorRead) {
     whatToDoIfISR(hdr_in);
+  } else if (hdr_in->cmd == 7 && hdr_in->src == 3) {
+    whatToDoIfThermistorsTest(hdr_in);
+  } else if ((hdr_in->cmd >=2 && hdr_in->cmd<=13) && hdr_in->src == 2) {
+    whatToDoIfFloat(hdr_in);
+  } else if ((hdr_in->cmd ==14 || hdr_in->cmd==15) && hdr_in->src == 2) {
+    whatToDoIfFlow(hdr_in);
+  } else if ((hdr_in->cmd >=16 && hdr_in->cmd <=25) && hdr_in->src == 2) {
+    whatToDoIfTempProbes(hdr_in);
+  } else if (hdr_in->cmd ==26 && hdr_in->src == 2) {
+    whatToDoIfPressure(hdr_in);
   } else if (hdr_in->cmd == eMapDevices) {
     whatToDoIfMap(hdr_in);
   } else if ((int)hdr_in->cmd < eSendAll &&
@@ -182,11 +195,11 @@ void commandCenter(const uint8_t *buffer) {
   } else if (hdr_in->cmd == eError) {
     whatToDoIfError(hdr_err, errorsReceived, numErrors);
 
-    resetAll(hdr_out);
+//    resetAll(hdr_out);
 
     /* Compute checksum for outgoing packet + add it to the end of packet */
     fillChecksum((uint8_t *)outgoingPacket);
-    needs_reset = true;
+//    needs_reset = true;
   } else {
     justReadHeader(hdr_in);
     cout << "DATA: ";
@@ -218,8 +231,18 @@ void checkHdr(const uint8_t *buffer, size_t len) {
   if (hdr_in->dst == myComputer) {
     if (verifyChecksum((uint8_t *)buffer)) {
       commandCenter(buffer);
-    } else
-      cout << "Bummer, checksum did not match." << endl;
+    } else{
+        cout << "Bummer, checksum did not match." << endl;
+        cout << "Length of data is " << (int) hdr_in->len << endl;
+        uint8_t * p= buffer;
+        cout << "first byte " << (int) *p << endl;
+        housekeeping_hdr_t* hdr = (housekeeping_hdr_t*) p;
+        uint8_t* data = p + sizeof(housekeeping_hdr_t);
+        uint8_t* cksum = data + hdr->len;
+        uint8_t sum = 0;
+        for (; p <= cksum; p++) sum += *p;
+        cout << "checksum and calculated are: " << (int) *cksum << "," << (int) sum << endl;
+      }
   }
 
   /* If it wasn't, cast it as an error & restart */
@@ -227,11 +250,11 @@ void checkHdr(const uint8_t *buffer, size_t len) {
     cout << "Bad destination received... Restarting downstream devices."
          << endl;
 
-    resetAll(hdr_out);
+//    resetAll(hdr_out);
 
     /* Compute checksum for outgoing packet + add it to the end of packet */
     fillChecksum((uint8_t *)outgoingPacket);
-    needs_reset = true;
+//    needs_reset = true;
   }
 }
 
@@ -239,6 +262,9 @@ void checkHdr(const uint8_t *buffer, size_t len) {
  * Main program
  *******************************************************************************/
 int main() {
+
+//  ofstream myfile;
+//  myfile.open("bugs_test.txt");
   /* Point to data in a way that it can be read as known data structures */
   hdr_in = (housekeeping_hdr_t *)incomingPacket;
   hdr_out = (housekeeping_hdr_t *)outgoingPacket;
