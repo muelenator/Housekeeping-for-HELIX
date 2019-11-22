@@ -11,7 +11,10 @@
  * Defines
  ****************************************************************************/
 #include "userTest.h"
-#include "iProtocol.h"
+#include "board_functions/Core_protocol.h"
+#include <iostream>
+#include <cstdint>
+#include <cstring>
 
 using std::cin;
 using std::cout;
@@ -239,12 +242,6 @@ void whatToDoIfSetPriority(housekeeping_hdr_t *hdr_in,
  *
  */
 void whatToDoIfISR(housekeeping_hdr_t *hdr_in) {
-  cout << "Reading in packet header... " << endl;
-  /* Read off header data */
-  cout << "Packet source: " << (int)hdr_in->src << endl;
-  cout << "Intended destination: " << (int)hdr_in->dst << endl;
-  cout << "Command : " << (int)hdr_in->cmd << endl;
-  cout << "Length of data attached: " << (int)hdr_in->len << endl;
   cout << "Internal temperature of device #" << (int)hdr_in->src << ": ";
 
   TempRead = 0;

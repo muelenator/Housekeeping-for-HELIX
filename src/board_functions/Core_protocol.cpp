@@ -12,7 +12,7 @@
 /*****************************************************************************
  * Defines
  ****************************************************************************/
-#include "iProtocol.h"
+#include "Core_protocol.h"
 
 /* Keeps running count of checksum mod 255. Used in computeMySum() */
 uint8_t checkDat = 0;

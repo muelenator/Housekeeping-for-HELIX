@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "iProtocol.h"
+#include "board_functions/Core_protocol.h"
 #include <iostream>
 
 /* Startup function for user interface */

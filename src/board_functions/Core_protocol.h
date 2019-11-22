@@ -32,6 +32,7 @@ typedef enum housekeeping_id
 	eDCTHsk = 3,		   // DCT housekeeping board
 	eDCTTemp1 = 4,	   // DCT temperature sensor housekeeping board #1
 	eDCTTemp2 = 5,		 // DCT temperature sensor housekeeping board #2
+	eSolarHsk = 6,
 	// etc...
 	eBroadcast = 255	 // Illegal as a source, but dst=255 means everyone responds
 } housekeeping_id;

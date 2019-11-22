@@ -31,8 +31,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "iProtocol.h"
+#include "board_functions/Core_protocol.h"
+#include "board_functions/Core_protocol.cpp"
 #include "userTest.h"
+
+#include "board_functions/SolarFunctions.h"
+#include "board_functions/SolarHSK_protocol.h"
+#include "board_functions/SolarFunctions.cpp"
+#include "board_functions/MagnetFunctions.h"
+#include "board_functions/MagnetFunctions.cpp"
+
+#include <fstream>
+
 
 using std::cin;
 using std::cout;
@@ -42,8 +52,8 @@ extern uint8_t cinNumber();
 
 /******************************************************************************/
 /* Serial port parameters */
-const char *port_name = "/dev/ttyACM0";
-int SerialBaud = 1292000;
+const char *port_name = "\\\\.\\COM10";
+int SerialBaud = 115200;
 /******************************************************************************/
 
 /* Name this device */
@@ -125,20 +135,9 @@ bool setup() {
           "reliability.";
   cout << endl;
 
-  cin >> numbufIN;
-
-  while (cin) {
-    numberIN = strtoul(numbufIN.c_str(), 0, 10);
-
-    if (numberIN > 255) {
-      cout << "Number too big. Input a number between 0 & 255: ";
-      cin >> numbufIN;
-    } else {
-      outgoingPacket[4 + lengthBeingSent] = (uint8_t)numberIN;
-      break;
-    }
-  }
+  outgoingPacket[4 + lengthBeingSent] = cinNumber();
   cout << endl;
+  
   return true;
 }
 
@@ -164,37 +163,148 @@ void commandCenter(const uint8_t *buffer) {
     downStreamDevices[numDevices] = hdr_in->src;
     numDevices += 1;
   }
-
-  /* Check commands */
+  
+  justReadHeader(hdr_in);
+  
   if (hdr_in->cmd == ePingPong) {
-    justReadHeader(hdr_in);
-    cout << endl;
-  } else if (hdr_in->cmd == eSetPriority) {
-    whatToDoIfSetPriority(hdr_in, hdr_prio);
-  } else if (hdr_in->cmd == eIntSensorRead) {
-    whatToDoIfISR(hdr_in);
-  } else if (hdr_in->cmd == eMapDevices) {
-    whatToDoIfMap(hdr_in);
+		cout << endl;
+		return;
   } else if ((int)hdr_in->cmd < eSendAll &&
              (int)hdr_in->cmd >= eSendLowPriority && hdr_in->len == 0) {
-    cout << "Device #" << (int)hdr_in->src;
-    cout << " did not have any data of this priority." << endl << endl;
+		cout << "Device #" << (int)hdr_in->src;
+		cout << " did not have any data of this priority." << endl << endl;
+		return;
   } else if (hdr_in->cmd == eError) {
-    whatToDoIfError(hdr_err, errorsReceived, numErrors);
+		whatToDoIfError(hdr_err, errorsReceived, numErrors);	
+		return;
+  } else if (hdr_in->cmd == eSetPriority) {
+		whatToDoIfSetPriority(hdr_in, hdr_prio);
+		return;
+  }
+  
+  uint8_t* datapac = (uint8_t*) (buffer+4);
+  
+  switch (hdr_in->src) {
+	  case eMainHsk:
+		if (hdr_in->cmd==eMapDevices) whatToDoIfMap(hdr_in);
+		else if (hdr_in->cmd==eIntSensorRead) whatToDoIfISR(hdr_in);
+		break;
+	  case eMagnetHsk:
+		if (hdr_in->cmd >=2 && hdr_in->cmd<=13) whatToDoIfFloat(hdr_in);
+		else if (hdr_in->cmd ==14 || hdr_in->cmd==15) whatToDoIfFlow(hdr_in);
+		else if (hdr_in->cmd >=16 && hdr_in->cmd <=25) whatToDoIfTempProbes(hdr_in);
+		else if (hdr_in->cmd ==26) whatToDoIfPressure(hdr_in);
+		break;
+	  case eDCTHsk:
+		if (hdr_in->cmd==hdr_in->cmd) whatToDoIfThermistorsTest(hdr_in);
+		break;
+	  case eSolarHsk:
+		switch (hdr_in->cmd) {
+		  case ePower1:
+			float power1, max_power1, min_power1;
+			power1 = LTC2992_code_to_power(*(uint32_t*)datapac, resistor, LTC2992_Power_12bit_lsb);
+			max_power1 = LTC2992_code_to_power(*(uint32_t*)(datapac+4), resistor, LTC2992_Power_12bit_lsb);
+			min_power1 = LTC2992_code_to_power(*(uint32_t*)(datapac+8), resistor, LTC2992_Power_12bit_lsb);
+			cout << "Power1:      " << power1 << endl;
+			cout << "Max Power1:  " << max_power1 << endl;
+			cout << "Min Power1:  " << min_power1 << endl;
+			break;
+		  case ePower2:
+			float power2, max_power2, min_power2;
+			power2 = LTC2992_code_to_power(*(uint32_t*)datapac, resistor, LTC2992_Power_12bit_lsb);
+			max_power2 = LTC2992_code_to_power(*(uint32_t*)(datapac+4), resistor, LTC2992_Power_12bit_lsb);
+			min_power2 = LTC2992_code_to_power(*(uint32_t*)(datapac+8), resistor, LTC2992_Power_12bit_lsb);
+			cout << "Power2:      " << power2 << endl;
+			cout << "Max Power2:  " << max_power2 << endl;
+			cout << "Min Power2:  " << min_power2 << endl;
+			break;
+			
+		  case eSense1:
+		    float SENSE1, max_SENSE1, min_SENSE1;
+			SENSE1 = LTC2992_SENSE_code_to_voltage(*(uint16_t*)datapac, LTC2992_SENSE_12bit_lsb);
+			max_SENSE1 = LTC2992_SENSE_code_to_voltage(*(uint16_t*)(datapac+2), LTC2992_SENSE_12bit_lsb);
+			min_SENSE1 = LTC2992_SENSE_code_to_voltage(*(uint16_t*)(datapac+4), LTC2992_SENSE_12bit_lsb);
+			cout << "Voltage1:      " << SENSE1 << endl;
+			cout << "Max Voltage1:  " << max_SENSE1 << endl;
+			cout << "Min Volatge1:  " << min_SENSE1 << endl;
+			break;
+		  case eSense2:
+			float SENSE2, max_SENSE2, min_SENSE2;
+			SENSE2 = LTC2992_SENSE_code_to_voltage(*(uint16_t*)datapac, LTC2992_SENSE_12bit_lsb);
+			max_SENSE2 = LTC2992_SENSE_code_to_voltage(*(uint16_t*)(datapac+2), LTC2992_SENSE_12bit_lsb);
+			min_SENSE2 = LTC2992_SENSE_code_to_voltage(*(uint16_t*)(datapac+4), LTC2992_SENSE_12bit_lsb);
+			cout << "Voltage2:      " << SENSE2 << endl;
+			cout << "Max Voltage2:  " << max_SENSE2 << endl;
+			cout << "Min Volatge2:  " << min_SENSE2 << endl;
+			break;
+			
+		  case eCurrent1:
+			float current1, max_current1, min_current1;
+			current1 = LTC2992_code_to_current(*(uint16_t*)datapac, resistor, LTC2992_DELTA_SENSE_12bit_lsb);
+			max_current1 = LTC2992_code_to_current(*(uint16_t*)(datapac+2), resistor, LTC2992_DELTA_SENSE_12bit_lsb);
+			min_current1 = LTC2992_code_to_current(*(uint16_t*)(datapac+4), resistor, LTC2992_DELTA_SENSE_12bit_lsb);
+			cout << "Current1:      " << current1 << endl;
+			cout << "Max Current1:  " << max_current1 << endl;
+			cout << "Min Current1:  " << min_current1 << endl;
+			break;
+		 case eCurrent2:
+			float current2, max_current2, min_current2;
+			current2 = LTC2992_code_to_current(*(uint16_t*)datapac, resistor, LTC2992_DELTA_SENSE_12bit_lsb);
+			max_current2 = LTC2992_code_to_current(*(uint16_t*)(datapac+2), resistor, LTC2992_DELTA_SENSE_12bit_lsb);
+			min_current2 = LTC2992_code_to_current(*(uint16_t*)(datapac+4), resistor, LTC2992_DELTA_SENSE_12bit_lsb);
+			cout << "Current2:      " << current2 << endl;
+			cout << "Max Current2:  " << max_current2 << endl;
+			cout << "Min Current2:  " << min_current2 << endl;
+			break;
+			
+		  case eGPIO1:
+			float GPIO1, max_GPIO1, min_GPIO1;
+			GPIO1 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)datapac, LTC2992_GPIO_12bit_lsb);
+			max_GPIO1 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+2), LTC2992_GPIO_12bit_lsb);
+			min_GPIO1 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+4), LTC2992_GPIO_12bit_lsb);
+			cout << "GPIO1 Voltage:      " << GPIO1 << endl;
+			cout << "Max GPIO1 Voltage:  " << max_GPIO1 << endl;
+			cout << "Min GPIO1 Volatge:  " << min_GPIO1 << endl;
+			break;
+		  case eGPIO2:
+		    float GPIO2, max_GPIO2, min_GPIO2;
+			GPIO2 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)datapac, LTC2992_GPIO_12bit_lsb);
+			max_GPIO2 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+2), LTC2992_GPIO_12bit_lsb);
+			min_GPIO2 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+4), LTC2992_GPIO_12bit_lsb);
+			cout << "GPIO2 Voltage:      " << GPIO2 << endl;
+			cout << "Max GPIO2 Voltage:  " << max_GPIO2 << endl;
+			cout << "Min GPIO2 Volatge:  " << min_GPIO2 << endl;
+			break;
+		  case eGPIO3:
+		    float GPIO3, max_GPIO3, min_GPIO3;
+			GPIO3 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)datapac, LTC2992_GPIO_12bit_lsb);
+			max_GPIO3 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+2), LTC2992_GPIO_12bit_lsb);
+			min_GPIO3 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+4), LTC2992_GPIO_12bit_lsb);
+			cout << "GPIO3 Voltage:      " << GPIO3 << endl;
+			cout << "Max GPIO3 Voltage:  " << max_GPIO3 << endl;
+			cout << "Min GPIO3 Volatge:  " << min_GPIO3 << endl;
+			break;
+		  case eGPIO4:
+			float GPIO4, max_GPIO4, min_GPIO4;
+			GPIO4 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)datapac, LTC2992_GPIO_12bit_lsb);
+			max_GPIO4 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+2), LTC2992_GPIO_12bit_lsb);
+			min_GPIO4 = LTC2992_GPIO_code_to_voltage(*(uint16_t*)(datapac+4), LTC2992_GPIO_12bit_lsb);
+			cout << "GPIO4 Voltage:      " << GPIO4 << endl;
+			cout << "Max GPIO4 Voltage:  " << max_GPIO4 << endl;
+			cout << "Min GPIO4 Volatge:  " << min_GPIO4 << endl;
+			break;
+		}
+		cout << endl;
+		break;	  
+	  
+	  default:
+		justReadHeader(hdr_in);
+		cout << "DATA: ";
 
-    resetAll(hdr_out);
-
-    /* Compute checksum for outgoing packet + add it to the end of packet */
-    fillChecksum((uint8_t *)outgoingPacket);
-    needs_reset = true;
-  } else {
-    justReadHeader(hdr_in);
-    cout << "DATA: ";
-
-    for (int i = 0; i < hdr_in->len; i++) {
-      cout << (int)*((uint8_t *)hdr_in + 4 + i) << " ";
-    }
-    cout << endl << endl;
+		for (int i = 0; i < hdr_in->len; i++) {
+			cout << (int)*((uint8_t *)hdr_in + 4 + i) << " ";
+		}
+		cout << endl << endl;
   }
 }
 
@@ -239,6 +349,9 @@ void checkHdr(const uint8_t *buffer, size_t len) {
  * Main program
  *******************************************************************************/
 int main() {
+
+//  ofstream myfile;
+//  myfile.open("bugs_test.txt");
   /* Point to data in a way that it can be read as known data structures */
   hdr_in = (housekeeping_hdr_t *)incomingPacket;
   hdr_out = (housekeeping_hdr_t *)outgoingPacket;
